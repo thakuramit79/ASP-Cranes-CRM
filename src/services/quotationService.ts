@@ -6,53 +6,52 @@ import { getLeadById } from './leadService';
 const quotationsCollection = collection(db, 'quotations');
 
 // Calculate total rent based on the form data
-const calculateTotalRent = (formData: any): number => {
-  const baseRate = getMachineBaseRate(formData.machineType);
-  const workingHours = Number(formData.workingHours) || 0;
-  const days = getDays(formData.orderType, workingHours);
-  
-  // Basic calculation
-  const dailyRate = baseRate * workingHours;
-  const basicRent = dailyRate * days;
-  
-  // Resource costs
-  const foodResources = Number(formData.foodResources) || 0;
-  const accomResources = Number(formData.accomResources) || 0;
-  const resourceCosts = ((foodResources * 250) + (accomResources * 1000)) * days;
-  
-  // Usage and elongation factors
-  const usageFactor = formData.usage === 'heavy' ? 1.2 : 1;
-  const elongationCost = basicRent * 0.15;
-  
-  // Trailer cost based on distance
-  const distance = Number(formData.siteDistance) || 0;
-  const trailerCost = distance * 500; // Increased rate per km for Indian context
-  
-  // Risk adjustment
-  const riskAdjustment = calculateRiskAdjustment(basicRent, formData.riskFactor);
-  
-  // Extra charges
-  const extraCharges = (
-    Number(formData.extraCharge) +
-    Number(formData.incidentalCharges) +
-    Number(formData.otherFactorsCharge)
-  );
-  
-  // Subtotal
-  const subtotal = (
-    basicRent * usageFactor +
-    elongationCost +
-    resourceCosts +
-    trailerCost +
-    riskAdjustment +
-    extraCharges
-  );
-  
-  // GST
-  const gstAmount = formData.billing === 'gst' ? subtotal * 0.18 : 0;
-  
-  // Total
-  return Math.round(subtotal + gstAmount);
+const calculateTotalRent = (quotationData: any): number => {
+  try {
+    // Get the appropriate base rate based on the order type
+    const baseRate = quotationData.selectedEquipment?.baseRates?.[quotationData.orderType] || 0;
+    
+    // Calculate working cost
+    const workingHours = quotationData.workingHours * quotationData.numberOfDays;
+    const workingCost = baseRate * workingHours;
+    
+    // Calculate other costs
+    const elongationCost = workingCost * 0.15; // 15% of working cost
+    const foodAccomCost = (quotationData.foodResources * 25 + quotationData.accomResources * 100) * quotationData.numberOfDays;
+    const trailerCost = quotationData.siteDistance * 50; // ₹50 per km
+    const usageFactor = quotationData.usage === 'heavy' ? 1.2 : 1;
+    const usageLoadFactor = workingCost * (usageFactor - 1);
+    
+    // Risk adjustment
+    let riskAdjustment = 0;
+    switch (quotationData.riskFactor) {
+      case 'high': riskAdjustment = workingCost * 0.15; break;
+      case 'medium': riskAdjustment = workingCost * 0.10; break;
+      case 'low': riskAdjustment = workingCost * 0.05; break;
+    }
+    
+    // Extra charges
+    const extraCharges = Number(quotationData.extraCharge || 0) +
+                        Number(quotationData.incidentalCharges || 0) +
+                        Number(quotationData.otherFactorsCharge || 0);
+    
+    // Calculate subtotal
+    const subtotal = workingCost * usageFactor +
+                    elongationCost +
+                    foodAccomCost +
+                    trailerCost +
+                    riskAdjustment +
+                    extraCharges;
+    
+    // Add GST if applicable
+    const gstAmount = quotationData.billing === 'gst' ? subtotal * 0.18 : 0;
+    
+    // Return total amount
+    return subtotal + gstAmount;
+  } catch (error) {
+    console.error('Error calculating total rent:', error);
+    return 0;
+  }
 };
 
 const getMachineBaseRate = (type: string): number => {

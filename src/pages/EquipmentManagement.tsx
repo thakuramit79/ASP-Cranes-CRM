@@ -9,7 +9,7 @@ import { Modal } from '../components/common/Modal';
 import { Toast } from '../components/common/Toast';
 import { Badge } from '../components/common/Badge';
 import { useAuthStore } from '../store/authStore';
-import { Equipment, CraneCategory } from '../types/equipment';
+import { Equipment, CraneCategory, OrderType, BaseRates } from '../types/equipment';
 import { getEquipment, createEquipment, updateEquipment, deleteEquipment } from '../services/firestore/equipmentService';
 import { formatCurrency } from '../utils/formatters';
 
@@ -25,6 +25,13 @@ const CATEGORY_OPTIONS = [
   { value: 'crawler_crane', label: 'Crawler Crane' },
   { value: 'pick_and_carry_crane', label: 'Pick & Carry Crane' },
 ];
+
+const ORDER_TYPES = [
+  { value: 'micro', label: 'Micro' },
+  { value: 'small', label: 'Small' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+] as const;
 
 export function EquipmentManagement() {
   const { user } = useAuthStore();
@@ -51,7 +58,12 @@ export function EquipmentManagement() {
     registrationDate: '',
     maxLiftingCapacity: '',
     unladenWeight: '',
-    baseRate: '',
+    baseRates: {
+      micro: '',
+      small: '',
+      monthly: '',
+      yearly: '',
+    },
     runningCostPerKm: '',
     description: '',
     status: 'available' as Equipment['status'],
@@ -98,8 +110,9 @@ export function EquipmentManagement() {
 
   const validateForm = () => {
     if (!formData.name || !formData.manufacturingDate || !formData.registrationDate || 
-        !formData.maxLiftingCapacity || !formData.unladenWeight || !formData.baseRate || 
-        !formData.runningCostPerKm) {
+        !formData.maxLiftingCapacity || !formData.unladenWeight || !formData.runningCostPerKm ||
+        !formData.baseRates.micro || !formData.baseRates.small || 
+        !formData.baseRates.monthly || !formData.baseRates.yearly) {
       showToast('Please fill in all required fields', 'error');
       return false;
     }
@@ -113,7 +126,9 @@ export function EquipmentManagement() {
 
     // Validate numeric fields
     if (isNaN(Number(formData.maxLiftingCapacity)) || isNaN(Number(formData.unladenWeight)) ||
-        isNaN(Number(formData.baseRate)) || isNaN(Number(formData.runningCostPerKm))) {
+        isNaN(Number(formData.runningCostPerKm)) ||
+        isNaN(Number(formData.baseRates.micro)) || isNaN(Number(formData.baseRates.small)) ||
+        isNaN(Number(formData.baseRates.monthly)) || isNaN(Number(formData.baseRates.yearly))) {
       showToast('Please enter valid numbers for numeric fields', 'error');
       return false;
     }
@@ -133,7 +148,12 @@ export function EquipmentManagement() {
         ...formData,
         maxLiftingCapacity: Number(formData.maxLiftingCapacity),
         unladenWeight: Number(formData.unladenWeight),
-        baseRate: Number(formData.baseRate),
+        baseRates: {
+          micro: Number(formData.baseRates.micro),
+          small: Number(formData.baseRates.small),
+          monthly: Number(formData.baseRates.monthly),
+          yearly: Number(formData.baseRates.yearly),
+        } as BaseRates,
         runningCostPerKm: Number(formData.runningCostPerKm),
       };
 
@@ -180,7 +200,12 @@ export function EquipmentManagement() {
       registrationDate: '',
       maxLiftingCapacity: '',
       unladenWeight: '',
-      baseRate: '',
+      baseRates: {
+        micro: '',
+        small: '',
+        monthly: '',
+        yearly: '',
+      },
       runningCostPerKm: '',
       description: '',
       status: 'available',
@@ -250,104 +275,163 @@ export function EquipmentManagement() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          <div className="col-span-full text-center py-8">Loading equipment...</div>
-        ) : filteredEquipment.length === 0 ? (
-          <div className="col-span-full text-center py-8 text-gray-500">
-            No equipment found. Add new equipment to get started.
-          </div>
-        ) : (
-          filteredEquipment.map((item) => (
-            <Card key={item.id} variant="bordered">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-lg">{item.name}</h3>
-                    <div className="flex gap-2 flex-wrap">
-                      <Badge variant="secondary">
-                        {CATEGORY_OPTIONS.find(opt => opt.value === item.category)?.label}
-                      </Badge>
-                      <Badge variant={
-                        item.status === 'available' ? 'success' :
-                        item.status === 'in_use' ? 'warning' :
-                        'error'
-                      }>
-                        {item.status}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedEquipment(item);
-                        setFormData({
-                          name: item.name,
-                          category: item.category,
-                          manufacturingDate: item.manufacturingDate,
-                          registrationDate: item.registrationDate,
-                          maxLiftingCapacity: item.maxLiftingCapacity.toString(),
-                          unladenWeight: item.unladenWeight.toString(),
-                          baseRate: item.baseRate.toString(),
-                          runningCostPerKm: item.runningCostPerKm.toString(),
-                          description: item.description || '',
-                          status: item.status,
-                        });
-                        setIsModalOpen(true);
-                      }}
-                    >
-                      <Edit2 size={16} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedEquipment(item);
-                        setIsDeleteModalOpen(true);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>Mfg: {item.manufacturingDate}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>Reg: {item.registrationDate}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Weight className="h-4 w-4" />
-                    <span>{item.maxLiftingCapacity} tons max lift</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Crane className="h-4 w-4" />
-                    <span>{item.unladenWeight} tons unladen</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <IndianRupee className="h-4 w-4" />
-                    <span>{formatCurrency(item.baseRate)}/hr base rate</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Truck className="h-4 w-4" />
-                    <span>{formatCurrency(item.runningCostPerKm)}/km running cost</span>
-                  </div>
-                </div>
-
-                {item.description && (
-                  <p className="mt-4 text-sm text-gray-500">{item.description}</p>
-                )}
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Equipment Inventory</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-4">Loading equipment...</div>
+          ) : filteredEquipment.length === 0 ? (
+            <div className="text-center py-4 text-gray-500">
+              No equipment found. Add new equipment to get started.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Equipment Details
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category & Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Specifications
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Rates
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredEquipment.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="font-medium text-gray-900">{item.name}</div>
+                          <div className="text-sm text-gray-500">{item.equipmentId}</div>
+                          {item.description && (
+                            <div className="text-sm text-gray-500 mt-1">{item.description}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-2">
+                          <Badge variant="secondary" className="w-full justify-center">
+                            {CATEGORY_OPTIONS.find(opt => opt.value === item.category)?.label}
+                          </Badge>
+                          <Badge
+                            variant={
+                              item.status === 'available' ? 'success' :
+                              item.status === 'in_use' ? 'warning' :
+                              'error'
+                            }
+                            className="w-full justify-center"
+                          >
+                            {item.status === 'available' ? 'Available' :
+                             item.status === 'in_use' ? 'In Use' :
+                             'Maintenance'}
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span>Mfg: {item.manufacturingDate}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Weight className="h-4 w-4 text-gray-400" />
+                            <span>{item.maxLiftingCapacity} tons max lift</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Crane className="h-4 w-4 text-gray-400" />
+                            <span>{item.unladenWeight} tons unladen</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm">
+                          <div className="bg-gray-50 rounded-lg p-3">
+                            <div className="font-medium text-gray-700 mb-2">Base Rates</div>
+                            <div className="space-y-1.5">
+                              {ORDER_TYPES.map(type => (
+                                <div key={type.value} className="flex items-center">
+                                  <span className="w-20 text-gray-500">{type.label}</span>
+                                  <span className="flex items-center">
+                                    <IndianRupee className="h-3.5 w-3.5 text-gray-400 mr-0.5" />
+                                    <span className="font-medium">{formatCurrency(item.baseRates[type.value])}</span>
+                                    <span className="text-gray-500 ml-1">/hr</span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 flex items-center text-gray-600">
+                            <Truck className="h-4 w-4 text-gray-400 mr-2" />
+                            <span className="text-gray-500">Running:</span>
+                            <span className="flex items-center ml-2">
+                              <IndianRupee className="h-3.5 w-3.5 text-gray-400 mr-0.5" />
+                              <span className="font-medium">{formatCurrency(item.runningCostPerKm)}</span>
+                              <span className="text-gray-500 ml-1">/km</span>
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedEquipment(item);
+                              setFormData({
+                                name: item.name,
+                                category: item.category,
+                                manufacturingDate: item.manufacturingDate,
+                                registrationDate: item.registrationDate,
+                                maxLiftingCapacity: item.maxLiftingCapacity.toString(),
+                                unladenWeight: item.unladenWeight.toString(),
+                                baseRates: {
+                                  micro: item.baseRates.micro.toString(),
+                                  small: item.baseRates.small.toString(),
+                                  monthly: item.baseRates.monthly.toString(),
+                                  yearly: item.baseRates.yearly.toString(),
+                                },
+                                runningCostPerKm: item.runningCostPerKm.toString(),
+                                description: item.description || '',
+                                status: item.status,
+                              });
+                              setIsModalOpen(true);
+                            }}
+                          >
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedEquipment(item);
+                              setIsDeleteModalOpen(true);
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Add/Edit Equipment Modal */}
       <Modal
@@ -413,25 +497,37 @@ export function EquipmentManagement() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Base Rate per hour (₹)"
-              type="number"
-              step="0.01"
-              value={formData.baseRate}
-              onChange={(e) => setFormData(prev => ({ ...prev, baseRate: e.target.value }))}
-              required
-            />
-
-            <Input
-              label="Running Cost per km (₹)"
-              type="number"
-              step="0.01"
-              value={formData.runningCostPerKm}
-              onChange={(e) => setFormData(prev => ({ ...prev, runningCostPerKm: e.target.value }))}
-              required
-            />
+          <div className="space-y-4">
+            <div className="font-medium text-gray-700">Base Rates per Hour (₹)</div>
+            <div className="grid grid-cols-2 gap-4">
+              {ORDER_TYPES.map(type => (
+                <Input
+                  key={type.value}
+                  label={`${type.label} Rate`}
+                  type="number"
+                  step="0.01"
+                  value={formData.baseRates[type.value]}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    baseRates: {
+                      ...prev.baseRates,
+                      [type.value]: e.target.value
+                    }
+                  }))}
+                  required
+                />
+              ))}
+            </div>
           </div>
+
+          <Input
+            label="Running Cost per km (₹)"
+            type="number"
+            step="0.01"
+            value={formData.runningCostPerKm}
+            onChange={(e) => setFormData(prev => ({ ...prev, runningCostPerKm: e.target.value }))}
+            required
+          />
 
           <Select
             label="Status"

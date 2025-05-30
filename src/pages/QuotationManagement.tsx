@@ -12,7 +12,10 @@ import {
   Truck,
   Users,
   Calendar,
-  IndianRupee
+  IndianRupee,
+  ChevronDown,
+  ChevronUp,
+  Settings
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
 import { Input } from '../components/common/Input';
@@ -21,13 +24,13 @@ import { Select } from '../components/common/Select';
 import { Modal } from '../components/common/Modal';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Toast } from '../components/common/Toast';
-import { EquipmentSelection } from '../components/EquipmentSelection';
 import { useAuthStore } from '../store/authStore';
-import { Lead } from '../types/lead';
-import { Equipment } from '../types/equipment';
-import { getLeads } from '../services/leadService';
+import { Deal } from '../types/deal';
+import { getDeals } from '../services/dealService';
 import { createQuotation } from '../services/quotationService';
 import { formatCurrency } from '../utils/formatters';
+import { Equipment, CraneCategory, OrderType } from '../types/equipment';
+import { getEquipmentByCategory } from '../services/firestore/equipmentService';
 
 const ORDER_TYPES = [
   { value: 'micro', label: 'Micro' },
@@ -35,6 +38,14 @@ const ORDER_TYPES = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'yearly', label: 'Yearly' },
 ];
+
+const MACHINE_TYPES = [
+  { value: '', label: 'Select machine type...' },
+  { value: 'mobile_crane', label: 'Mobile Crane' },
+  { value: 'tower_crane', label: 'Tower Crane' },
+  { value: 'crawler_crane', label: 'Crawler Crane' },
+  { value: 'pick_and_carry_crane', label: 'Pick & Carry Crane' },
+] satisfies { value: string; label: string }[];
 
 const SHIFT_OPTIONS = [
   { value: 'single', label: 'Single Shift' },
@@ -71,11 +82,41 @@ const OTHER_FACTORS = [
   { value: 'helper', label: 'Helper' },
 ];
 
+const FOOD_RATE_PER_MONTH = 2500;
+const ACCOMMODATION_RATE_PER_MONTH = 4000;
+
+interface FormData {
+  numberOfDays: string;
+  orderType: OrderType;
+  machineType: string;
+  selectedEquipment: string;
+  workingHours: string;
+  dayNight: string;
+  shift: string;
+  sundayWorking: string;
+  foodResources: string;
+  accomResources: string;
+  usage: string;
+  siteDistance: string;
+  mobDemob: string;
+  mobRelaxation: string;
+  workingCost: string;
+  elongation: string;
+  dealType: string;
+  extraCharge: string;
+  billing: string;
+  riskFactor: string;
+  incidentalCharges: string;
+  otherFactors: string[];
+  otherFactorsCharge: string;
+  includeGst: boolean;
+}
+
 export function QuotationManagement() {
   const { user } = useAuthStore();
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{
@@ -85,51 +126,54 @@ export function QuotationManagement() {
     variant?: 'success' | 'error' | 'warning';
   }>({ show: false, title: '' });
 
+  // Add state for selected equipment base rate
+  const [selectedEquipmentBaseRate, setSelectedEquipmentBaseRate] = useState<number>(0);
+
+  // Add state for tracking expanded cards
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({
+    duration: true,
+    orderType: true,
+    machineSelection: true,
+    workingHours: true,
+    accommodation: true,
+    mobDemob: true,
+    additional: true
+  });
+
+  const showToast = (
+    title: string,
+    variant: 'success' | 'error' | 'warning' = 'success'
+  ) => {
+    setToast({ show: true, title, variant });
+    setTimeout(() => setToast({ show: false, title: '' }), 3000);
+  };
+
   // Form state
-  const [formData, setFormData] = useState({
-    // H1 - Order Type
+  const [formData, setFormData] = useState<FormData>({
+    numberOfDays: '',
     orderType: 'micro',
-    
-    // H2 - Type of Machine
     machineType: '',
-    equipmentId: '',
-    
-    // H3 - Hours
-    workingHours: '',
+    selectedEquipment: '',
+    workingHours: '8',
     dayNight: 'day',
     shift: 'single',
     sundayWorking: 'no',
-    
-    // H4 - Accommodation
     foodResources: '',
     accomResources: '',
-    
-    // H5 - Usage
     usage: 'light',
-    
-    // H6 - Mob - Demob
     siteDistance: '',
-    trailerCost: '',
+    mobDemob: '',
     mobRelaxation: '',
-    
-    // H7 - Fuel
     workingCost: '',
     elongation: '',
-    
-    // H8 - Commercial
     dealType: 'no_advance',
     extraCharge: '',
     billing: 'gst',
-    
-    // H9 - Risk Factor
     riskFactor: 'low',
-    
-    // H10 - Incidental Charge
     incidentalCharges: '',
-    
-    // H11 - Other Factors
-    otherFactors: '',
+    otherFactors: [],
     otherFactorsCharge: '',
+    includeGst: true,
   });
 
   // Calculated values
@@ -138,7 +182,7 @@ export function QuotationManagement() {
     totalHours: 0,
     workingCost: 0,
     elongationCost: 0,
-    trailerCost: 0,
+    mobDemobCost: 0,
     foodAccomCost: 0,
     usageLoadFactor: 0,
     extraCharges: 0,
@@ -147,90 +191,144 @@ export function QuotationManagement() {
     totalAmount: 0,
   });
 
+  // Update the determineOrderType function return type
+  const determineOrderType = (days: number): OrderType => {
+    if (days > 25) {
+      return 'monthly';
+    } else if (days > 10) {
+      return 'small';
+    }
+    return 'micro';
+  };
+
   useEffect(() => {
-    fetchLeads();
+    fetchDeals();
   }, []);
 
   useEffect(() => {
     calculateQuotation();
-  }, [formData, selectedEquipment]);
+  }, [formData, selectedEquipmentBaseRate]);
 
-  const fetchLeads = async () => {
+  useEffect(() => {
+    if (formData.machineType) {
+      fetchEquipmentByCategory(formData.machineType as CraneCategory);
+    } else {
+      setAvailableEquipment([]);
+    }
+  }, [formData.machineType]);
+
+  useEffect(() => {
+    if (formData.selectedEquipment) {
+      const selected = availableEquipment.find(eq => eq.id === formData.selectedEquipment);
+      if (selected?.baseRates) {
+        const newBaseRate = selected.baseRates[formData.orderType];
+        setSelectedEquipmentBaseRate(newBaseRate);
+      }
+    }
+  }, [formData.orderType, formData.selectedEquipment, availableEquipment]);
+
+  const fetchDeals = async () => {
     try {
-      const data = await getLeads();
-      setLeads(data.filter(lead => lead.status === 'won' || lead.status === 'qualified'));
+      const data = await getDeals();
+      setDeals(data.filter(deal => deal.stage === 'qualification'));
       setIsLoading(false);
     } catch (error) {
-      console.error('Error fetching leads:', error);
-      showToast('Error fetching leads', 'error');
+      console.error('Error fetching deals:', error);
+      showToast('Error fetching deals', 'error');
     }
   };
 
-  const handleEquipmentChange = (equipment: Equipment | null) => {
-    setSelectedEquipment(equipment);
-    setFormData(prev => ({
-      ...prev,
-      equipmentId: equipment?.id || '',
-    }));
-  };
-
   const calculateQuotation = () => {
-    if (!selectedEquipment) return;
+    // Early return if no days or equipment selected
+    if (!formData.numberOfDays || !selectedEquipmentBaseRate) {
+      setCalculations({
+        baseRate: 0,
+        totalHours: 0,
+        workingCost: 0,
+        elongationCost: 0,
+        mobDemobCost: 0,
+        foodAccomCost: 0,
+        usageLoadFactor: 0,
+        extraCharges: 0,
+        riskAdjustment: 0,
+        gstAmount: 0,
+        totalAmount: 0,
+      });
+      return;
+    }
 
-    // Base calculations
-    const baseRate = selectedEquipment.baseRate;
-    const workingHours = calculateWorkingHours();
-    const workingCost = baseRate * workingHours;
+    const days = Number(formData.numberOfDays);
+    const isMonthly = days > 25;
+    const effectiveDays = isMonthly ? 26 : days;
+    const workingHours = calculateWorkingHours(effectiveDays);
+    const shiftMultiplier = formData.shift === 'double' ? 2 : 1;
     
-    // Usage factor
+    let workingCost;
+    if (isMonthly) {
+      // Calculate hourly rate using actual working hours: (monthly rate / 26) / working hours
+      const actualHours = parseFloat(formData.workingHours) || 8;
+      const hourlyRate = (selectedEquipmentBaseRate / 26) / actualHours;
+      workingCost = hourlyRate * actualHours * effectiveDays * shiftMultiplier;
+    } else {
+      // For hourly rates (micro and small)
+      workingCost = selectedEquipmentBaseRate * workingHours * shiftMultiplier;
+    }
+
+    // Calculate usage load factor based on usage type
+    const usagePercentage = formData.usage === 'heavy' ? 0.10 : 0.05; // 10% for heavy, 5% for light
+    const usageLoadFactor = selectedEquipmentBaseRate * usagePercentage;
+
     const usageFactor = formData.usage === 'heavy' ? 1.2 : 1;
-    
-    // Elongation cost
     const elongationCost = workingCost * 0.15;
     
-    // Food & Accommodation
-    const foodAccomCost = (
-      (Number(formData.foodResources) * 25 + Number(formData.accomResources) * 100) * 
-      getDays()
-    );
-    
-    // Trailer cost based on distance
-    const trailerCost = calculateTrailerCost();
-    
-    // Risk adjustment
+    // Calculate food and accommodation cost based on monthly rates
+    let foodAccomCost;
+    if (isMonthly) {
+      // For monthly orders, use the full monthly rate
+      foodAccomCost = (
+        (Number(formData.foodResources) * FOOD_RATE_PER_MONTH) +
+        (Number(formData.accomResources) * ACCOMMODATION_RATE_PER_MONTH)
+      );
+    } else {
+      // For non-monthly orders, calculate daily rate and multiply by days
+      const foodDailyRate = FOOD_RATE_PER_MONTH / 26;
+      const accomDailyRate = ACCOMMODATION_RATE_PER_MONTH / 26;
+      foodAccomCost = (
+        (Number(formData.foodResources) * foodDailyRate +
+        Number(formData.accomResources) * accomDailyRate) *
+        effectiveDays
+      );
+    }
+
+    const mobDemobCost = calculateMobDemobCost();
     const riskAdjustment = calculateRiskAdjustment(workingCost);
-    
-    // Extra charges
     const extraCharges = (
       Number(formData.extraCharge) +
       Number(formData.incidentalCharges) +
       Number(formData.otherFactorsCharge)
     );
     
-    // Subtotal
     const subtotal = (
-      workingCost * usageFactor +
+      workingCost +
       elongationCost +
       foodAccomCost +
-      trailerCost +
+      mobDemobCost +
       riskAdjustment +
+      usageLoadFactor +
       extraCharges
     );
     
-    // GST
-    const gstAmount = formData.billing === 'gst' ? subtotal * 0.18 : 0;
-    
-    // Total
+    const gstAmount = formData.includeGst ? subtotal * 0.18 : 0;
     const totalAmount = subtotal + gstAmount;
     
     setCalculations({
-      baseRate,
-      totalHours: workingHours,
+      baseRate: selectedEquipmentBaseRate,
+      totalHours: isMonthly ? 0 : workingHours,
       workingCost,
       elongationCost,
-      trailerCost,
+      mobDemobCost,
       foodAccomCost,
-      usageLoadFactor: workingCost * (usageFactor - 1),
+      usageLoadFactor,
       extraCharges,
       riskAdjustment,
       gstAmount,
@@ -238,50 +336,62 @@ export function QuotationManagement() {
     });
   };
 
-  const getDays = (): number => {
-    switch (formData.orderType) {
-      case 'monthly': return 26;
-      case 'yearly': return 312;
-      default: return Number(formData.workingHours) / 10;
-    }
-  };
-
-  const calculateWorkingHours = (): number => {
-    const hours = Number(formData.workingHours);
-    const days = getDays();
+  const calculateWorkingHours = (days: number): number => {
+    // For single shift, always use 8 hours
+    const baseHours = formData.shift === 'single' ? 8 : Number(formData.workingHours);
     const shiftMultiplier = formData.shift === 'double' ? 2 : 1;
-    return hours * days * shiftMultiplier;
+    return baseHours * days * shiftMultiplier;
   };
 
-  const calculateTrailerCost = (): number => {
+  const calculateMobDemobCost = (): number => {
     const distance = Number(formData.siteDistance);
-    const baseTrailerRate = 50; // per km
-    return distance * baseTrailerRate;
+    const trailerCost = Number(formData.mobDemob) || 0;
+    const mobRelaxationPercent = Number(formData.mobRelaxation) || 0;
+    const selectedEquip = availableEquipment.find(eq => eq.id === formData.selectedEquipment);
+    const runningCostPerKm = selectedEquip?.runningCostPerKm || 0;
+    
+    // Step 1: Calculate Distance to site cost
+    const distToSiteCost = distance * runningCostPerKm * 2;
+    
+    // Step 2: Calculate Mob Relaxation amount (X% of Distance to site cost)
+    const mobRelaxationAmount = (distToSiteCost * mobRelaxationPercent) / 100;
+    
+    // Step 3: Final Mob - Demob cost = (Distance to site cost - Mob Relaxation) + Trailer cost
+    const finalMobDemobCost = (distToSiteCost - mobRelaxationAmount) + trailerCost;
+    
+    return finalMobDemobCost;
   };
 
   const calculateRiskAdjustment = (baseAmount: number): number => {
-    switch (formData.riskFactor) {
-      case 'high': return baseAmount * 0.15;
-      case 'medium': return baseAmount * 0.10;
-      case 'low': return baseAmount * 0.05;
-      default: return 0;
+    const riskPercentages: Record<'low' | 'medium' | 'high', number> = {
+      low: 0.05,    // 5% for low risk
+      medium: 0.10, // 10% for medium risk
+      high: 0.15    // 15% for high risk
+    };
+    
+    return selectedEquipmentBaseRate * (riskPercentages[formData.riskFactor as 'low' | 'medium' | 'high'] || 0);
+  };
+
+  const fetchEquipmentByCategory = async (category: CraneCategory) => {
+    try {
+      const equipment = await getEquipmentByCategory(category);
+      setAvailableEquipment(equipment.filter(eq => eq.status === 'available'));
+    } catch (error) {
+      console.error('Error fetching equipment:', error);
+      showToast('Error fetching available equipment', 'error');
     }
   };
 
   const handleSubmit = async () => {
-    if (!selectedLead) {
-      showToast('Please select a lead', 'error');
-      return;
-    }
-
-    if (!selectedEquipment) {
-      showToast('Please select equipment', 'error');
+    if (!selectedDeal) {
+      showToast('Please select a deal', 'error');
       return;
     }
 
     try {
       const quotationData = {
-        leadId: selectedLead.id,
+        customerId: selectedDeal.customerId,
+        customerName: selectedDeal.customer.name,
         ...formData,
         ...calculations,
         createdBy: user?.id || '',
@@ -295,12 +405,11 @@ export function QuotationManagement() {
     }
   };
 
-  const showToast = (
-    title: string,
-    variant: 'success' | 'error' | 'warning' = 'success'
-  ) => {
-    setToast({ show: true, title, variant });
-    setTimeout(() => setToast({ show: false, title: '' }), 3000);
+  const toggleCard = (cardName: string) => {
+    setExpandedCards(prev => ({
+      ...prev,
+      [cardName]: !prev[cardName]
+    }));
   };
 
   if (!user || (user.role !== 'sales_agent' && user.role !== 'admin')) {
@@ -316,22 +425,30 @@ export function QuotationManagement() {
       <div className="flex justify-between items-center">
         <div className="flex-1">
           <Select
-            label="Select Lead"
-            options={leads.map(lead => ({
-              value: lead.id,
-              label: `${lead.customerName} - ${lead.serviceNeeded}`,
-            }))}
-            value={selectedLead?.id || ''}
+            label="Select Deal"
+            options={[
+              { value: '', label: 'Select a deal in qualification stage...' },
+              ...deals.map(deal => ({
+                value: deal.id,
+                label: `${deal.customer.name} - ${deal.title} (${formatCurrency(deal.value)})`,
+              }))
+            ]}
+            value={selectedDeal?.id || ''}
             onChange={(value) => {
-              const lead = leads.find(l => l.id === value);
-              setSelectedLead(lead || null);
+              const deal = deals.find(d => d.id === value);
+              setSelectedDeal(deal || null);
             }}
           />
+          {!deals.length && (
+            <div className="mt-2 text-sm text-gray-500">
+              No deals in qualification stage available. Move deals to qualification stage to create quotations.
+            </div>
+          )}
         </div>
         
         <Button
           onClick={() => setIsCreateModalOpen(true)}
-          disabled={!selectedLead}
+          disabled={!selectedDeal}
           leftIcon={<Calculator size={16} />}
         >
           New Quotation
@@ -343,366 +460,752 @@ export function QuotationManagement() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Create New Quotation"
-        size="xl"
+        size="full"
       >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Form Section */}
-          <div className="space-y-6">
-            {/* H1 - Order Type */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Type</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Select
-                  label="Order Type"
-                  options={ORDER_TYPES}
-                  value={formData.orderType}
-                  onChange={(value) => setFormData(prev => ({ ...prev, orderType: value }))}
-                />
-              </CardContent>
-            </Card>
-
-            {/* H2 - Type of Machine */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold">
-                  H2 - Type of Machine
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <EquipmentSelection
-                  selectedCategory={formData.machineType}
-                  selectedEquipmentId={formData.equipmentId}
-                  onCategoryChange={(category) => 
-                    setFormData(prev => ({ ...prev, machineType: category, equipmentId: '' }))
-                  }
-                  onEquipmentChange={handleEquipmentChange}
-                />
-                {selectedEquipment && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-600">Base Rate (per hour)</span>
-                      <span className="text-sm font-semibold text-primary-600">
-                        {formatCurrency(selectedEquipment.baseRate)}
-                      </span>
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-12 gap-6">
+            {/* Form Section */}
+            <div className="col-span-7 space-y-6">
+              {/* Number of Days */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('duration')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Duration</CardTitle>
                     </div>
+                    {expandedCards.duration ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
                   </div>
+                </CardHeader>
+                {expandedCards.duration && (
+                  <CardContent className="pt-4 space-y-4">
+                    <Input
+                      type="number"
+                      label="Number of Days"
+                      value={formData.numberOfDays}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const days = Number(e.target.value);
+                        if (days > 30) {
+                          showToast('Maximum duration is 30 days', 'warning');
+                          return;
+                        }
+                        const newOrderType = determineOrderType(days);
+                        setFormData(prev => ({
+                          ...prev,
+                          numberOfDays: e.target.value,
+                          orderType: newOrderType
+                        }));
+                      }}
+                      required
+                      min="1"
+                      max="30"
+                      placeholder="Enter number of days (max 30)"
+                    />
+                    {formData.numberOfDays && selectedEquipmentBaseRate > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {formData.orderType !== 'monthly' ? (
+                          <div className="text-sm text-gray-600">
+                            Daily Rate: {formatCurrency(selectedEquipmentBaseRate * (formData.shift === 'single' ? 8 : Number(formData.workingHours)))}/day
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-600">
+                            Monthly Rate: {formatCurrency(selectedEquipmentBaseRate)}/month
+                          </div>
+                        )}
+                        <div className="text-sm font-medium text-primary-600">
+                          {Number(formData.numberOfDays) > 25 ? 'Monthly rate' :
+                           Number(formData.numberOfDays) > 10 ? 'Small order rate' :
+                           'Micro order rate'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Note: 
+                          {Number(formData.numberOfDays) <= 10 ? '1-10 days: Micro rate (per hour)' :
+                           Number(formData.numberOfDays) <= 25 ? '11-25 days: Small rate (per hour)' :
+                           '26+ days: Monthly rate (fixed monthly rate)'}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
                 )}
-              </CardContent>
-            </Card>
+              </Card>
 
-            {/* H3 - Hours */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Working Hours</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Input
-                  type="number"
-                  label="Number of Hours"
-                  value={formData.workingHours}
-                  onChange={(e) => setFormData(prev => ({ ...prev, workingHours: e.target.value }))}
-                />
-                <Select
-                  label="Day/Night"
-                  options={TIME_OPTIONS}
-                  value={formData.dayNight}
-                  onChange={(value) => setFormData(prev => ({ ...prev, dayNight: value }))}
-                />
-                <Select
-                  label="Shift"
-                  options={SHIFT_OPTIONS}
-                  value={formData.shift}
-                  onChange={(value) => setFormData(prev => ({ ...prev, shift: value }))}
-                />
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="sundayWorking"
-                    checked={formData.sundayWorking === 'yes'}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      sundayWorking: e.target.checked ? 'yes' : 'no' 
-                    }))}
-                    className="rounded border-gray-300"
-                  />
-                  <label htmlFor="sundayWorking" className="text-sm">
-                    Sunday Working
-                  </label>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* H4 - Accommodation */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Accommodation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Input
-                  type="number"
-                  label="Number of Resources (Food)"
-                  value={formData.foodResources}
-                  onChange={(e) => setFormData(prev => ({ ...prev, foodResources: e.target.value }))}
-                />
-                <Input
-                  type="number"
-                  label="Number of Resources (Accommodation)"
-                  value={formData.accomResources}
-                  onChange={(e) => setFormData(prev => ({ ...prev, accomResources: e.target.value }))}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Additional sections */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Additional Parameters</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Select
-                  label="Usage"
-                  options={USAGE_OPTIONS}
-                  value={formData.usage}
-                  onChange={(value) => setFormData(prev => ({ ...prev, usage: value }))}
-                />
-                
-                <Input
-                  type="number"
-                  label="Distance to Site (km)"
-                  value={formData.siteDistance}
-                  onChange={(e) => setFormData(prev => ({ ...prev, siteDistance: e.target.value }))}
-                />
-                
-                <Select
-                  label="Deal Type"
-                  options={DEAL_TYPES}
-                  value={formData.dealType}
-                  onChange={(value) => setFormData(prev => ({ ...prev, dealType: value }))}
-                />
-                
-                <Input
-                  type="number"
-                  label="Extra Commercial Charges"
-                  value={formData.extraCharge}
-                  onChange={(e) => setFormData(prev => ({ ...prev, extraCharge: e.target.value }))}
-                />
-                
-                <Select
-                  label="Risk Factor"
-                  options={RISK_LEVELS}
-                  value={formData.riskFactor}
-                  onChange={(value) => setFormData(prev => ({ ...prev, riskFactor: value }))}
-                />
-                
-                <Input
-                  type="number"
-                  label="Incidental Charges"
-                  value={formData.incidentalCharges}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    incidentalCharges: e.target.value 
-                  }))}
-                />
-                
-                <Select
-                  label="Other Factors"
-                  options={OTHER_FACTORS}
-                  value={formData.otherFactors}
-                  onChange={(value) => setFormData(prev => ({ ...prev, otherFactors: value }))}
-                />
-                
-                <Input
-                  type="number"
-                  label="Other Factors Charge"
-                  value={formData.otherFactorsCharge}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    otherFactorsCharge: e.target.value 
-                  }))}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Summary Section - Fixed on Right Side */}
-          <div className="space-y-6">
-            <Card className="sticky top-0">
-              <CardHeader>
-                <CardTitle>Quotation Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Base Rate */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Base Rate (per hour)</span>
-                      <span>{formatCurrency(selectedEquipment?.baseRate || 0)}</span>
+              {/* H1 - Order Type */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('orderType')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Order Type</CardTitle>
                     </div>
+                    {expandedCards.orderType ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
                   </div>
+                </CardHeader>
+                {expandedCards.orderType && (
+                  <CardContent className="pt-4 space-y-4">
+                    <Select
+                      label="Order Type"
+                      options={ORDER_TYPES}
+                      value={formData.orderType}
+                      onChange={(value) => setFormData(prev => ({
+                        ...prev,
+                        orderType: value as OrderType
+                      }))}
+                      disabled={Number(formData.numberOfDays) > 0}
+                    />
+                    {Number(formData.numberOfDays) > 0 && (
+                      <div className="mt-2 text-sm text-amber-600">
+                        {Number(formData.numberOfDays) > 25 ? 'Order type is set to Monthly as duration exceeds 25 days' :
+                         Number(formData.numberOfDays) > 10 ? 'Order type is set to Small as duration is between 11-25 days' :
+                         'Order type is set to Micro as duration is 10 days or less'}
+                      </div>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
 
-                  {/* Working Hours */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Total Working Hours</span>
-                      <span>{calculations.totalHours}</span>
+              {/* H2 - Machine Selection */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('machineSelection')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Truck className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Machine Selection</CardTitle>
                     </div>
+                    {expandedCards.machineSelection ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
                   </div>
+                </CardHeader>
+                {expandedCards.machineSelection && (
+                  <CardContent className="pt-4 space-y-4">
+                    <Select
+                      label="Machine Type"
+                      options={MACHINE_TYPES}
+                      value={formData.machineType}
+                      onChange={(value) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          machineType: value,
+                          selectedEquipment: '', // Reset equipment selection when type changes
+                        }));
+                        setSelectedEquipmentBaseRate(0); // Reset base rate when type changes
+                      }}
+                      required
+                    />
 
-                  {/* Working Cost */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Working Cost</span>
-                      <span>{formatCurrency(calculations.workingCost)}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary-500"
-                        style={{ 
-                          width: `${(calculations.workingCost / calculations.totalAmount) * 100}%` 
+                    {formData.machineType && (
+                      <Select
+                        label="Select Equipment"
+                        options={[
+                          { value: '', label: 'Select equipment...' },
+                          ...availableEquipment.map(eq => ({
+                            value: eq.id,
+                            label: `${eq.equipmentId} - ${eq.name} (${formatCurrency(eq.baseRates[formData.orderType])}${formData.orderType === 'monthly' ? '/month' : '/hr'})`,
+                          }))
+                        ]}
+                        value={formData.selectedEquipment}
+                        onChange={(value) => {
+                          const selected = availableEquipment.find(eq => eq.id === value);
+                          setFormData(prev => ({
+                            ...prev,
+                            selectedEquipment: value,
+                          }));
+                          if (selected?.baseRates) {
+                            const newBaseRate = selected.baseRates[formData.orderType];
+                            setSelectedEquipmentBaseRate(newBaseRate);
+                          } else {
+                            setSelectedEquipmentBaseRate(0);
+                          }
                         }}
+                        required
+                      />
+                    )}
+                    
+                    {!availableEquipment.length && formData.machineType && (
+                      <div className="text-sm text-amber-600">
+                        No available equipment found for this machine type
+                      </div>
+                    )}
+
+                    {!formData.machineType && (
+                      <div className="text-sm text-gray-500">
+                        Select a machine type to view available equipment
+                      </div>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+
+              {/* H3 - Hours */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('workingHours')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Working Hours</CardTitle>
+                    </div>
+                    {expandedCards.workingHours ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                </CardHeader>
+                {expandedCards.workingHours && (
+                  <CardContent className="pt-4 space-y-4">
+                    <Select
+                      label="Shift"
+                      options={SHIFT_OPTIONS}
+                      value={formData.shift}
+                      onChange={(value) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          shift: value
+                        }));
+                      }}
+                    />
+                    <div>
+                      <Input
+                        type="text"
+                        label="Number of Hours"
+                        value={formData.workingHours}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow only numbers and one decimal point
+                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            const numValue = parseFloat(value);
+                            if (!value || (numValue >= 1 && numValue <= 24)) {
+                              setFormData(prev => ({ ...prev, workingHours: value }));
+                            }
+                          }
+                        }}
+                        required
+                        placeholder="Enter hours (e.g. 7.5, 8, 8.5)"
+                      />
+                      <div className="flex items-center mt-1.5 text-sm text-gray-600">
+                        <Clock className="w-4 h-4 mr-1.5" />
+                        <span>Standard single shift duration is 8 hours</span>
+                      </div>
+                    </div>
+                    <Select
+                      label="Day/Night"
+                      options={TIME_OPTIONS}
+                      value={formData.dayNight}
+                      onChange={(value) => setFormData(prev => ({ ...prev, dayNight: value }))}
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="sundayWorking"
+                        checked={formData.sundayWorking === 'yes'}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          sundayWorking: e.target.checked ? 'yes' : 'no' 
+                        }))}
+                        className="rounded border-gray-300"
+                      />
+                      <label htmlFor="sundayWorking" className="text-sm">
+                        Sunday Working
+                      </label>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+
+              {/* H4 - Accommodation */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('accommodation')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Accommodation</CardTitle>
+                    </div>
+                    {expandedCards.accommodation ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                </CardHeader>
+                {expandedCards.accommodation && (
+                  <CardContent className="pt-4 space-y-4">
+                    <div>
+                      <Input
+                        type="number"
+                        label="Number of Resources (Food)"
+                        value={formData.foodResources}
+                        onChange={(e) => setFormData(prev => ({ ...prev, foodResources: e.target.value }))}
+                      />
+                      <div className="text-sm text-gray-500 mt-1">
+                        Rate: ₹{FOOD_RATE_PER_MONTH}/month per person
+                      </div>
+                    </div>
+                    <div>
+                      <Input
+                        type="number"
+                        label="Number of Resources (Accommodation)"
+                        value={formData.accomResources}
+                        onChange={(e) => setFormData(prev => ({ ...prev, accomResources: e.target.value }))}
+                      />
+                      <div className="text-sm text-gray-500 mt-1">
+                        Rate: ₹{ACCOMMODATION_RATE_PER_MONTH}/month per person
+                      </div>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+
+              {/* Mob - Demob Section */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('mobDemob')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Truck className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Mob - Demob</CardTitle>
+                    </div>
+                    {expandedCards.mobDemob ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                </CardHeader>
+                {expandedCards.mobDemob && (
+                  <CardContent className="pt-4 space-y-4">
+                    <div>
+                      <Input
+                        type="number"
+                        label="Distance to Site (km)"
+                        value={formData.siteDistance}
+                        onChange={(e) => setFormData(prev => ({ ...prev, siteDistance: e.target.value }))}
+                        placeholder="Enter distance in kilometers"
                       />
                     </div>
-                  </div>
-
-                  {/* Elongation */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Elongation</span>
-                      <span>{formatCurrency(calculations.elongationCost)}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-secondary-500"
-                        style={{ 
-                          width: `${(calculations.elongationCost / calculations.totalAmount) * 100}%` 
-                        }}
+                    <div>
+                      <Input
+                        type="number"
+                        label="Trailer Cost"
+                        value={formData.mobDemob}
+                        onChange={(e) => setFormData(prev => ({ ...prev, mobDemob: e.target.value }))}
+                        placeholder="Enter additional trailer charges"
                       />
                     </div>
-                  </div>
-
-                  {/* Trailer Cost */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Trailer Cost</span>
-                      <span>{formatCurrency(calculations.trailerCost)}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-accent-500"
-                        style={{ 
-                          width: `${(calculations.trailerCost / calculations.totalAmount) * 100}%` 
-                        }}
+                    <div>
+                      <Input
+                        type="number"
+                        label="Mob Relaxation"
+                        value={formData.mobRelaxation}
+                        onChange={(e) => setFormData(prev => ({ ...prev, mobRelaxation: e.target.value }))}
+                        placeholder="Enter relaxation value (X%)"
                       />
+                      <div className="text-sm text-gray-500 mt-1">
+                        Enter percentage value for discount on distance cost
+                      </div>
                     </div>
-                  </div>
+                  </CardContent>
+                )}
+              </Card>
 
-                  {/* Food & Accommodation */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Food & Accommodation</span>
-                      <span>{formatCurrency(calculations.foodAccomCost)}</span>
+              {/* Additional sections */}
+              <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
+                <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors duration-200" onClick={() => toggleCard('additional')}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Settings className="w-5 h-5 text-gray-500" />
+                      <CardTitle className="text-lg font-medium">Additional Parameters</CardTitle>
                     </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-success-500"
-                        style={{ 
-                          width: `${(calculations.foodAccomCost / calculations.totalAmount) * 100}%` 
-                        }}
-                      />
-                    </div>
+                    {expandedCards.additional ? (
+                      <ChevronUp className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-400" />
+                    )}
                   </div>
-
-                  {/* Usage Load Factor */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Usage Load Factor</span>
-                      <span>{formatCurrency(calculations.usageLoadFactor)}</span>
+                </CardHeader>
+                {expandedCards.additional && (
+                  <CardContent className="pt-4 space-y-4">
+                    <Select
+                      label="Usage"
+                      options={USAGE_OPTIONS}
+                      value={formData.usage}
+                      onChange={(value) => setFormData(prev => ({ ...prev, usage: value }))}
+                    />
+                    <div className="flex items-center mt-1.5 text-sm text-gray-600">
+                      <AlertCircle className="w-4 h-4 mr-1.5" />
+                      <span>Usage rates: Light - 5% of base rate | Heavy - 10% of base rate</span>
                     </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-warning-500"
-                        style={{ 
-                          width: `${(calculations.usageLoadFactor / calculations.totalAmount) * 100}%` 
-                        }}
-                      />
+                    
+                    <Select
+                      label="Deal Type"
+                      options={DEAL_TYPES}
+                      value={formData.dealType}
+                      onChange={(value) => setFormData(prev => ({ ...prev, dealType: value }))}
+                    />
+                    
+                    <Input
+                      type="number"
+                      label="Extra Commercial Charges"
+                      value={formData.extraCharge}
+                      onChange={(e) => setFormData(prev => ({ ...prev, extraCharge: e.target.value }))}
+                    />
+                    
+                    <Select
+                      label="Risk Factor"
+                      options={RISK_LEVELS}
+                      value={formData.riskFactor}
+                      onChange={(value) => setFormData(prev => ({ ...prev, riskFactor: value }))}
+                    />
+                    
+                    <div className="flex items-center mt-1.5 text-sm text-gray-600">
+                      <AlertCircle className="w-4 h-4 mr-1.5" />
+                      <span>Risk rates: Low - 5% | Medium - 10% | High - 15% of base rate</span>
                     </div>
-                  </div>
-
-                  {/* Extra Charges */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Extra Charges</span>
-                      <span>{formatCurrency(calculations.extraCharges)}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-error-500"
-                        style={{ 
-                          width: `${(calculations.extraCharges / calculations.totalAmount) * 100}%` 
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Risk Adjustment */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Risk Adjustment</span>
-                      <span>{formatCurrency(calculations.riskAdjustment)}</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary-300"
-                        style={{ 
-                          width: `${(calculations.riskAdjustment / calculations.totalAmount) * 100}%` 
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* GST */}
-                  {calculations.gstAmount > 0 && (
+                    
+                    <Input
+                      type="number"
+                      label="Incidental Charges"
+                      value={formData.incidentalCharges}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        incidentalCharges: e.target.value 
+                      }))}
+                    />
+                    
                     <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>GST (18%)</span>
-                        <span>{formatCurrency(calculations.gstAmount)}</span>
+                      <label className="text-sm font-medium text-gray-700">Other Factors</label>
+                      <div className="space-y-2">
+                        {OTHER_FACTORS.map((factor) => (
+                          <label key={factor.value} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-50 transition-colors duration-200">
+                            <input
+                              type="checkbox"
+                              checked={formData.otherFactors.includes(factor.value)}
+                              onChange={(e) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  otherFactors: e.target.checked
+                                    ? [...prev.otherFactors, factor.value]
+                                    : prev.otherFactors.filter(f => f !== factor.value)
+                                }));
+                              }}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-gray-700">{factor.label}</span>
+                          </label>
+                        ))}
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-secondary-300"
-                          style={{ 
-                            width: `${(calculations.gstAmount / calculations.totalAmount) * 100}%` 
-                          }}
-                        />
+                    </div>
+                    
+                    <Input
+                      type="number"
+                      label="Other Factors Charge"
+                      value={formData.otherFactorsCharge}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        otherFactorsCharge: e.target.value 
+                      }))}
+                    />
+                  </CardContent>
+                )}
+              </Card>
+            </div>
+
+            {/* Summary Section */}
+            <div className="col-span-5 space-y-6 sticky top-6">
+              <Card className="shadow-lg border-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+                <CardHeader className="border-b border-gray-100 pb-6">
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-primary-500" />
+                    Quotation Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* Base Rate Info */}
+                  {selectedEquipmentBaseRate > 0 && (
+                    <div className="mb-6 p-4 bg-primary-50/50 rounded-xl border border-primary-100">
+                      <div className="text-sm font-medium text-primary-900 mb-2">Equipment Details</div>
+                      <div className="text-2xl font-bold text-primary-700">
+                        ₹{formatCurrency(selectedEquipmentBaseRate).replace('₹', '')}
+                        <span className="text-base font-medium text-primary-600 ml-1">
+                          {formData.orderType === 'monthly' ? '/month' : '/hr'}
+                        </span>
                       </div>
+                      <div className="text-sm text-primary-600 mt-1">
+                        {formData.orderType.charAt(0).toUpperCase() + formData.orderType.slice(1)} Rate
+                      </div>
+                      {formData.orderType === 'monthly' && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <span>Hourly Rate: </span>
+                            <span className="font-medium ml-1">
+                              ₹{formatCurrency((selectedEquipmentBaseRate / 26) / (parseFloat(formData.workingHours) || 8)).replace('₹', '')}/hr
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {formData.numberOfDays && (
+                        <div className="mt-3 text-sm text-gray-600">
+                          <div className="flex justify-between items-center mb-1">
+                            <span>Total Days:</span>
+                            <span className="font-medium">
+                              {Number(formData.numberOfDays) > 25 ? '26 (Monthly)' : formData.numberOfDays}
+                            </span>
+                          </div>
+                          {formData.orderType !== 'monthly' && (
+                            <div className="flex justify-between items-center mb-1">
+                              <span>Hours per Day:</span>
+                              <span className="font-medium">
+                                {formData.shift === 'single' ? '8' : formData.workingHours}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center">
+                            <span>Order Type:</span>
+                            <span className="font-medium">
+                              {formData.orderType.charAt(0).toUpperCase() + formData.orderType.slice(1)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Total Amount */}
-                  <div className="pt-4 mt-4 border-t border-gray-200">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">Total Amount</span>
-                      <span className="text-xl font-bold text-primary-600">
-                        {formatCurrency(calculations.totalAmount)}
-                      </span>
+                  <div className="space-y-6">
+                    {/* Cost Breakdown Section */}
+                    <div className="space-y-4">
+                      {/* Working Cost */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Working Cost</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(calculations.workingCost)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.workingCost / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Elongation */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Elongation</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(calculations.elongationCost)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-secondary-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.elongationCost / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Mob - Demob */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Mob - Demob</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-medium">{formatCurrency(calculations.mobDemobCost)}</div>
+                            {formData.siteDistance && Number(formData.siteDistance) > 0 && (
+                              <div className="text-xs text-gray-500 space-y-1 mt-1">
+                                <div className="border-b pb-1">
+                                  <div>Distance: {formData.siteDistance} km</div>
+                                  <div>Running Cost: ₹{availableEquipment.find(eq => eq.id === formData.selectedEquipment)?.runningCostPerKm || 0}/km</div>
+                                  <div className="font-medium">Distance Cost: {formatCurrency(Number(formData.siteDistance) * (availableEquipment.find(eq => eq.id === formData.selectedEquipment)?.runningCostPerKm || 0) * 2)}</div>
+                                </div>
+                                {Number(formData.mobRelaxation) > 0 && (
+                                  <div className="border-b pb-1">
+                                    <div>Relaxation: {formData.mobRelaxation}%</div>
+                                    <div>Relaxation Amount: {formatCurrency((Number(formData.siteDistance) * (availableEquipment.find(eq => eq.id === formData.selectedEquipment)?.runningCostPerKm || 0) * 2 * Number(formData.mobRelaxation)) / 100)}</div>
+                                  </div>
+                                )}
+                                {Number(formData.mobDemob) > 0 && (
+                                  <div>
+                                    <div>Additional Trailer Cost: {formatCurrency(Number(formData.mobDemob))}</div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-accent-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.mobDemobCost / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Food & Accommodation */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Food & Accommodation</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(calculations.foodAccomCost)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-success-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.foodAccomCost / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Usage Load Factor */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Usage Load Factor ({formData.usage === 'heavy' ? '10%' : '5%'})</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(calculations.usageLoadFactor)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-warning-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.usageLoadFactor / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Extra Charges */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Extra Charges</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(calculations.extraCharges)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-error-500 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.extraCharges / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Risk Adjustment */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Risk Adjustment ({formData.riskFactor === 'high' ? '15%' : formData.riskFactor === 'medium' ? '10%' : '5%'})</span>
+                          </div>
+                          <div className="text-right">
+                            <div>{formatCurrency(calculations.riskAdjustment)}</div>
+                            <div className="text-xs text-gray-500">
+                              Based on {formData.riskFactor} risk level
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary-300 rounded-full transition-all duration-300"
+                            style={{ 
+                              width: `${(calculations.riskAdjustment / calculations.totalAmount) * 100}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Total Section */}
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm text-gray-600">
+                          <span>Subtotal</span>
+                          <span className="font-medium">{formatCurrency(calculations.totalAmount - calculations.gstAmount)}</span>
+                        </div>
+                        
+                        {formData.includeGst && (
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>GST (18%)</span>
+                            <span className="font-medium">{formatCurrency(calculations.gstAmount)}</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-center pt-3 border-t border-gray-200">
+                          <span className="text-lg font-semibold">Total Amount</span>
+                          <span className="text-2xl font-bold text-primary-600">
+                            {formatCurrency(calculations.totalAmount)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* GST Toggle */}
+                    <div className="mt-6">
+                      <label className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors duration-200">
+                        <input
+                          type="checkbox"
+                          checked={formData.includeGst}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            includeGst: e.target.checked 
+                          }))}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">Include GST</div>
+                          <div className="text-sm text-gray-500">
+                            GST will be calculated at 18% of the total amount
+                          </div>
+                        </div>
+                      </label>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSubmit}>
-                Create Quotation
-              </Button>
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="flex-1 py-2.5"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSubmit}
+                  className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700"
+                >
+                  Create Quotation
+                </Button>
+              </div>
             </div>
           </div>
         </div>
