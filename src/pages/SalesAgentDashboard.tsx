@@ -50,7 +50,6 @@ export function SalesAgentDashboard() {
   // Count leads by status
   const newLeadsCount = leads.filter(lead => lead.status === 'new').length;
   const inProcessLeadsCount = leads.filter(lead => lead.status === 'in_process').length;
-  const wonLeadsCount = leads.filter(lead => lead.status === 'won').length;
   const lostLeadsCount = leads.filter(lead => lead.status === 'lost').length;
   
   // Calculate total quotation value
@@ -81,11 +80,10 @@ export function SalesAgentDashboard() {
           variant="secondary"
         />
         <StatCard
-          title="Won Deals"
-          value={wonLeadsCount}
-          icon={<IndianRupee className="h-5 w-5 text-success-600" />}
-          variant="success"
-          trend={{ value: 12, isPositive: true }}
+          title="Lost Deals"
+          value={lostLeadsCount}
+          icon={<IndianRupee className="h-5 w-5 text-error-600" />}
+          variant="error"
         />
         <StatCard
           title="Quotation Value"

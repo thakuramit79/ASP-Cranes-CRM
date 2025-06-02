@@ -30,9 +30,6 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     case 'unqualified':
       variant = 'error';
       break;
-    case 'won':
-      variant = 'success';
-      break;
     case 'lost':
       variant = 'error';
       break;

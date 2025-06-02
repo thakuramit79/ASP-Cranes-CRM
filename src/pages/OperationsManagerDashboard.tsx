@@ -49,9 +49,6 @@ export function OperationsManagerDashboard() {
     fetchData();
   }, []);
   
-  // Filter won leads that need scheduling
-  const wonLeads = leads.filter(lead => lead.status === 'won');
-  
   // Count jobs by status
   const scheduledJobsCount = jobs.filter(job => job.status === 'scheduled').length;
   const completedJobsCount = jobs.filter(job => job.status === 'completed').length;
@@ -63,12 +60,6 @@ export function OperationsManagerDashboard() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Won Leads"
-          value={wonLeads.length}
-          icon={<FileText className="h-5 w-5 text-primary-600" />}
-          variant="primary"
-        />
         <StatCard
           title="Scheduled Jobs"
           value={scheduledJobsCount}
@@ -101,7 +92,7 @@ export function OperationsManagerDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              {wonLeads.length === 0 ? (
+              {leads.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">No leads to schedule</p>
               ) : (
                 <div className="overflow-x-auto">
@@ -123,7 +114,7 @@ export function OperationsManagerDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {wonLeads.slice(0, 5).map((lead) => (
+                      {leads.slice(0, 5).map((lead) => (
                         <tr key={lead.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="font-medium text-gray-900">{lead.customerName}</div>

@@ -35,14 +35,14 @@ const LEAD_STATUS_OPTIONS = [
   { value: 'in_process', label: 'In Process' },
   { value: 'qualified', label: 'Qualified' },
   { value: 'unqualified', label: 'Unqualified' },
-  { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
 ];
 
 const MACHINERY_OPTIONS = [
   { value: 'mobile_crane', label: 'Mobile Crane' },
-  { value: 'lift_crane', label: 'Lift Crane' },
-  { value: 'pick_and_carry', label: 'Pick & Carry Crane' },
+  { value: 'tower_crane', label: 'Tower Crane' },
+  { value: 'crawler_crane', label: 'Crawler Crane' },
+  { value: 'pick_and_carry_crane', label: 'Pick & Carry Crane' },
 ];
 
 const SHIFT_OPTIONS = [
@@ -205,14 +205,6 @@ export function LeadManagement() {
           )
         );
         
-        // If status is changed to 'won', show success message with deal conversion option
-        if (newStatus === 'won') {
-          showToast(
-            'Lead marked as won! Would you like to convert it to a deal?',
-            'success'
-          );
-        }
-        
         showToast('Lead status updated', 'success');
       }
     } catch (error) {
@@ -256,11 +248,10 @@ export function LeadManagement() {
   };
 
   const handleConvertToDeal = async (lead: Lead) => {
-    if (lead.status !== 'won') {
-      showToast('Only won leads can be converted to deals', 'warning');
+    if (lead.status !== 'qualified') {
+      showToast('Only qualified leads can be converted to deals', 'warning');
       return;
     }
-
     setSelectedLead(lead);
     setIsCustomerSelectionModalOpen(true);
   };
@@ -436,7 +427,7 @@ export function LeadManagement() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                          {lead.status === 'won' && (
+                          {lead.status === 'qualified' && (
                             <Button
                               variant="outline"
                               size="sm"

@@ -6,18 +6,24 @@ import {
   Users, 
   Settings, 
   MapPin,
-  Activity
+  Activity,
+  FileText,
+  Calendar
 } from 'lucide-react';
 import { StatCard } from '../components/dashboard/StatCard';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { getLeads } from '../services/leadService';
-import { getJobs, getAllEquipment, getAllOperators } from '../services/jobService';
+import { getJobs, getAllOperators } from '../services/jobService';
+import { getEquipment as getAllEquipment } from '../services/firestore/equipmentService';
+import { getDeals } from '../services/dealService';
 import { Lead } from '../types/lead';
 import { Job } from '../types/job';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatters';
+import { Equipment } from '../types/equipment';
+import { Deal } from '../types/deal';
 
 export function AdminDashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -25,21 +31,26 @@ export function AdminDashboard() {
   const [equipmentCount, setEquipmentCount] = useState(0);
   const [operatorCount, setOperatorCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [leadsData, jobsData, equipmentData, operatorsData] = await Promise.all([
+        const [leadsData, jobsData, equipmentData, operatorsData, dealsData] = await Promise.all([
           getLeads(),
           getJobs(),
           getAllEquipment(),
           getAllOperators(),
+          getDeals(),
         ]);
         
         setLeads(leadsData);
         setJobs(jobsData);
         setEquipmentCount(equipmentData.length);
         setOperatorCount(operatorsData.length);
+        setEquipment(equipmentData);
+        setDeals(dealsData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -59,9 +70,13 @@ export function AdminDashboard() {
     job => job.status === 'in_progress' || job.status === 'scheduled'
   ).length / equipmentCount * 100;
   
-  const wonLeadsCount = leads.filter(lead => lead.status === 'won').length;
-  const totalLeads = leads.length;
-  const conversionRate = totalLeads > 0 ? (wonLeadsCount / totalLeads * 100) : 0;
+  // Equipment status counts
+  const availableCount = equipment.filter(e => e.status === 'available').length;
+  const inUseCount = equipment.filter(e => e.status === 'in_use').length;
+  const maintenanceCount = equipment.filter(e => e.status === 'maintenance').length;
+  
+  // Deal conversion calculation
+  const dealConversion = leads.length > 0 ? (deals.length / leads.length) * 100 : 0;
   
   if (isLoading) {
     return <div className="flex justify-center py-10">Loading dashboard...</div>;
@@ -84,8 +99,8 @@ export function AdminDashboard() {
           variant="secondary"
         />
         <StatCard
-          title="Lead Conversion"
-          value={`${Math.round(conversionRate)}%`}
+          title="Deal Conversion"
+          value={`${Math.round(dealConversion)}%`}
           icon={<Activity className="h-5 w-5 text-success-600" />}
           variant="success"
         />
@@ -164,34 +179,20 @@ export function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <Link to="/users">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<Users size={16} />}>
-                    Manage Users
-                  </Button>
+                <Link to="/quotations">
+                  <Button variant="outline" size="sm" fullWidth leftIcon={<FileText size={16} />}>Quotation</Button>
                 </Link>
-                
                 <Link to="/equipment">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<Truck size={16} />}>
-                    Equipment Management
-                  </Button>
+                  <Button variant="outline" size="sm" fullWidth leftIcon={<Truck size={16} />}>Equipment</Button>
                 </Link>
-                
-                <Link to="/locations">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<MapPin size={16} />}>
-                    Site Locations
-                  </Button>
+                <Link to="/customers">
+                  <Button variant="outline" size="sm" fullWidth leftIcon={<Users size={16} />}>Customers</Button>
                 </Link>
-                
+                <Link to="/jobs">
+                  <Button variant="outline" size="sm" fullWidth leftIcon={<Calendar size={16} />}>Jobs</Button>
+                </Link>
                 <Link to="/reports">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<BarChart3 size={16} />}>
-                    View Reports
-                  </Button>
-                </Link>
-                
-                <Link to="/settings">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<Settings size={16} />}>
-                    System Settings
-                  </Button>
+                  <Button variant="outline" size="sm" fullWidth leftIcon={<BarChart3 size={16} />}>Reports</Button>
                 </Link>
               </div>
             </CardContent>
@@ -205,32 +206,30 @@ export function AdminDashboard() {
             <CardTitle>Lead Pipeline</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">New Leads</p>
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {leads.filter(l => l.status === 'new').length}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">In Negotiation</p>
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {leads.filter(l => l.status === 'negotiation').length}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Won</p>
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {leads.filter(l => l.status === 'won').length}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Lost</p>
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {leads.filter(l => l.status === 'lost').length}
-                  </p>
-                </div>
+            <div className="flex justify-between items-center px-4 py-6">
+              <div className="flex-1 flex flex-col items-center">
+                <div className="text-sm text-gray-500 mb-1">New</div>
+                <div className="text-3xl font-bold text-gray-900">{leads.filter(l => l.status === 'new').length}</div>
+              </div>
+              <div className="h-10 w-px bg-gray-200 mx-2" />
+              <div className="flex-1 flex flex-col items-center">
+                <div className="text-sm text-gray-500 mb-1 text-center">In Process</div>
+                <div className="text-3xl font-bold text-gray-900">{leads.filter(l => l.status === 'in_process').length}</div>
+              </div>
+              <div className="h-10 w-px bg-gray-200 mx-2" />
+              <div className="flex-1 flex flex-col items-center">
+                <div className="text-sm text-gray-500 mb-1">Qualified</div>
+                <div className="text-3xl font-bold text-gray-900">{leads.filter(l => l.status === 'qualified').length}</div>
+              </div>
+              <div className="h-10 w-px bg-gray-200 mx-2" />
+              <div className="flex-1 flex flex-col items-center">
+                <div className="text-sm text-gray-500 mb-1">Unqualified</div>
+                <div className="text-3xl font-bold text-gray-900">{leads.filter(l => l.status === 'unqualified').length}</div>
+              </div>
+              <div className="h-10 w-px bg-gray-200 mx-2" />
+              <div className="flex-1 flex flex-col items-center">
+                <div className="text-sm text-gray-500 mb-1">Lost</div>
+                <div className="text-3xl font-bold text-gray-900">{leads.filter(l => l.status === 'lost').length}</div>
               </div>
             </div>
           </CardContent>
@@ -238,40 +237,21 @@ export function AdminDashboard() {
         
         <Card>
           <CardHeader>
-            <CardTitle>Regional Performance</CardTitle>
+            <CardTitle>Equipment Availability</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">North Region</p>
-                  <p className="text-sm text-gray-500">12 Active Jobs</p>
-                </div>
-                <p className="text-lg font-semibold text-success-600">+24%</p>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>
+                <span className="font-medium text-gray-700">{availableCount} Available</span>
               </div>
-              
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">South Region</p>
-                  <p className="text-sm text-gray-500">8 Active Jobs</p>
-                </div>
-                <p className="text-lg font-semibold text-success-600">+18%</p>
+              <div className="flex items-center gap-3">
+                <span className="inline-block w-3 h-3 rounded-full bg-red-500"></span>
+                <span className="font-medium text-gray-700">{inUseCount} In Use</span>
               </div>
-              
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">East Region</p>
-                  <p className="text-sm text-gray-500">15 Active Jobs</p>
-                </div>
-                <p className="text-lg font-semibold text-success-600">+32%</p>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium">West Region</p>
-                  <p className="text-sm text-gray-500">10 Active Jobs</p>
-                </div>
-                <p className="text-lg font-semibold text-warning-600">-5%</p>
+              <div className="flex items-center gap-3">
+                <span className="inline-block w-3 h-3 rounded-full bg-yellow-500"></span>
+                <span className="font-medium text-gray-700">{maintenanceCount} Under Maintenance</span>
               </div>
             </div>
           </CardContent>
