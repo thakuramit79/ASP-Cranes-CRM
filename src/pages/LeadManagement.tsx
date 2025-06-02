@@ -494,7 +494,10 @@ export function LeadManagement() {
 
             <Select
               label="Type of Machinery Needed"
-              options={MACHINERY_OPTIONS}
+              options={[
+                { value: '', label: 'Select Machinery Type' },
+                ...MACHINERY_OPTIONS
+              ]}
               value={formData.machineryType}
               onChange={(value) => setFormData(prev => ({ ...prev, machineryType: value }))}
               required
@@ -546,10 +549,13 @@ export function LeadManagement() {
             {user?.role === 'admin' && (
               <Select
                 label="Assign To"
-                options={salesAgents.map(agent => ({
-                  value: agent.id,
-                  label: agent.name,
-                }))}
+                options={[
+                  { value: '', label: 'Select Sales Agent' },
+                  ...salesAgents.map(agent => ({
+                    value: agent.id,
+                    label: agent.name,
+                  }))
+                ]}
                 value={formData.assignedTo}
                 onChange={(value) => setFormData(prev => ({ ...prev, assignedTo: value }))}
                 required
