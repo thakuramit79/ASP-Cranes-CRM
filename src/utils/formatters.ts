@@ -1,4 +1,5 @@
 export const formatCurrency = (amount: number): string => {
+  if (isNaN(amount) || amount == null) return '₹0';
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',

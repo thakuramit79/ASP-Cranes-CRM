@@ -1,6 +1,6 @@
 import { Quotation, QuotationInputs } from '../types/quotation';
 import { db } from '../lib/firebase';
-import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getLeadById } from './leadService';
 
 const quotationsCollection = collection(db, 'quotations');
@@ -101,12 +101,18 @@ export const createQuotation = async (quotationData: QuotationInputs): Promise<Q
     const newQuotation = {
       ...quotationData,
       totalRent,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
     
     const docRef = await addDoc(quotationsCollection, newQuotation);
-    return { id: docRef.id, ...newQuotation } as Quotation;
+    return { 
+      id: docRef.id, 
+      ...quotationData,
+      totalRent,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as Quotation;
   } catch (error) {
     console.error('Error creating quotation:', error);
     throw error;
@@ -147,28 +153,30 @@ export const getQuotationById = async (id: string): Promise<Quotation | null> =>
 };
 
 // Update quotation
-export const updateQuotation = async (
-  id: string,
-  updates: Partial<QuotationInputs>
-): Promise<Quotation | null> => {
+export const updateQuotation = async (id: string, updates: Partial<QuotationInputs>): Promise<Quotation> => {
   try {
     const docRef = doc(quotationsCollection, id);
-    const docSnap = await getDoc(docRef);
-    
-    if (!docSnap.exists()) return null;
-    
-    const currentData = docSnap.data() as QuotationInputs;
-    const updatedData = {
-      ...currentData,
+    const totalRent = calculateTotalRent(updates as QuotationInputs);
+
+    const updateData = {
       ...updates,
-      updatedAt: new Date().toISOString(),
+      totalRent,
+      updatedAt: serverTimestamp(),
     };
-    
-    const totalRent = calculateTotalRent(updatedData);
-    const finalData = { ...updatedData, totalRent };
-    
-    await updateDoc(docRef, finalData);
-    return { id, ...finalData } as Quotation;
+
+    await updateDoc(docRef, updateData);
+
+    // Return updated document
+    const updatedDoc = await getDoc(docRef);
+    if (!updatedDoc.exists()) {
+      throw new Error('Updated document not found');
+    }
+
+    return {
+      id,
+      ...updatedDoc.data(),
+      updatedAt: new Date().toISOString(),
+    } as Quotation;
   } catch (error) {
     console.error('Error updating quotation:', error);
     throw error;

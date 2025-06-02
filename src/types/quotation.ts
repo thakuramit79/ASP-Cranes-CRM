@@ -24,6 +24,13 @@ export interface QuotationInputs {
   incidentalCharges: number;
   otherFactorsCharge: number;
   billing: 'gst' | 'non_gst';
+  baseRate: number;
+  includeGst: boolean;
+  shift: 'single' | 'double';
+  dayNight: 'day' | 'night';
+  mobDemob: number;
+  mobRelaxation: number;
+  runningCostPerKm: number;
 }
 
 export interface Quotation extends QuotationInputs {

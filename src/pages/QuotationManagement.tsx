@@ -16,7 +16,8 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
-  ChevronRight
+  ChevronRight,
+  Edit
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
 import { Input } from '../components/common/Input';
@@ -28,7 +29,7 @@ import { Toast } from '../components/common/Toast';
 import { useAuthStore } from '../store/authStore';
 import { Deal } from '../types/deal';
 import { getDeals } from '../services/dealService';
-import { createQuotation, getQuotations } from '../services/quotationService';
+import { createQuotation, getQuotations, updateQuotation } from '../services/quotationService';
 import { formatCurrency } from '../utils/formatters';
 import { Equipment, CraneCategory, OrderType } from '../types/equipment';
 import { getEquipmentByCategory } from '../services/firestore/equipmentService';
@@ -128,6 +129,7 @@ export function QuotationManagement() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{
     show: boolean;
@@ -188,7 +190,6 @@ export function QuotationManagement() {
     baseRate: 0,
     totalHours: 0,
     workingCost: 0,
-    elongationCost: 0,
     mobDemobCost: 0,
     foodAccomCost: 0,
     usageLoadFactor: 0,
@@ -261,7 +262,6 @@ export function QuotationManagement() {
         baseRate: 0,
         totalHours: 0,
         workingCost: 0,
-        elongationCost: 0,
         mobDemobCost: 0,
         foodAccomCost: 0,
         usageLoadFactor: 0,
@@ -292,7 +292,6 @@ export function QuotationManagement() {
     const usageLoadFactor = selectedEquipmentBaseRate * usagePercentage;
 
     const usageFactor = formData.usage === 'heavy' ? 1.2 : 1;
-    const elongationCost = workingCost * 0.15;
     
     let foodAccomCost;
     if (isMonthly) {
@@ -327,7 +326,6 @@ export function QuotationManagement() {
     
     const subtotal = (
       workingCost +
-      elongationCost +
       foodAccomCost +
       mobDemobCost +
       riskAdjustment +
@@ -342,7 +340,6 @@ export function QuotationManagement() {
       baseRate: selectedEquipmentBaseRate,
       totalHours: isMonthly ? 0 : workingHours,
       workingCost,
-      elongationCost,
       mobDemobCost,
       foodAccomCost,
       usageLoadFactor,
@@ -393,8 +390,39 @@ export function QuotationManagement() {
     }
   };
 
+  const handleEdit = (quotation: Quotation) => {
+    setEditingQuotation(quotation);
+    // Populate form data with existing quotation data
+    setFormData({
+      numberOfDays: quotation.numberOfDays.toString(),
+      orderType: quotation.orderType,
+      machineType: quotation.selectedEquipment?.name.split(' ')[0].toLowerCase() || '',
+      selectedEquipment: quotation.selectedEquipment?.id || '',
+      workingHours: quotation.workingHours.toString(),
+      dayNight: quotation.dayNight,
+      shift: quotation.shift,
+      sundayWorking: 'no', // Default value as it's not stored
+      foodResources: quotation.foodResources.toString(),
+      accomResources: quotation.accomResources.toString(),
+      usage: quotation.usage,
+      siteDistance: quotation.siteDistance.toString(),
+      mobDemob: quotation.mobDemob.toString(),
+      mobRelaxation: quotation.mobRelaxation.toString(),
+      workingCost: '',
+      elongation: '',
+      dealType: 'no_advance',
+      extraCharge: quotation.extraCharge.toString(),
+      billing: quotation.billing,
+      riskFactor: quotation.riskFactor,
+      incidentalCharges: [], // Will need to reverse calculate from total
+      otherFactors: [], // Will need to reverse calculate from total
+      includeGst: quotation.includeGst,
+    });
+    setIsCreateModalOpen(true);
+  };
+
   const handleSubmit = async () => {
-    if (!selectedDeal) {
+    if (!selectedDeal && !editingQuotation) {
       showToast('Please select a deal', 'error');
       return;
     }
@@ -405,11 +433,19 @@ export function QuotationManagement() {
         showToast('Please select equipment', 'error');
         return;
       }
+
+      // Calculate charges
       let otherFactorsTotal = 0;
       if (formData.otherFactors.includes('rigger')) otherFactorsTotal += RIGGER_AMOUNT;
       if (formData.otherFactors.includes('helper')) otherFactorsTotal += HELPER_AMOUNT;
+
+      const incidentalChargesTotal = formData.incidentalCharges.reduce((sum, val) => {
+        const found = INCIDENTAL_OPTIONS.find(opt => opt.value === val);
+        return sum + (found ? found.amount : 0);
+      }, 0);
+
       const quotationData = {
-        orderType: formData.orderType,
+        orderType: formData.orderType as OrderType,
         numberOfDays: Number(formData.numberOfDays),
         workingHours: Number(formData.workingHours),
         selectedEquipment: {
@@ -424,20 +460,38 @@ export function QuotationManagement() {
         usage: formData.usage as 'normal' | 'heavy',
         riskFactor: formData.riskFactor as 'low' | 'medium' | 'high',
         extraCharge: Number(formData.extraCharge),
-        incidentalCharges: formData.incidentalCharges.reduce((sum, val) => {
-          const found = INCIDENTAL_OPTIONS.find(opt => opt.value === val);
-          return sum + (found ? found.amount : 0);
-        }, 0),
+        incidentalCharges: incidentalChargesTotal,
         otherFactorsCharge: otherFactorsTotal,
         billing: formData.billing as 'gst' | 'non_gst',
+        // Add required fields from Quotation interface
+        leadId: editingQuotation?.leadId || selectedDeal?.leadId || '',
+        customerId: editingQuotation?.customerId || selectedDeal?.customerId || '',
+        customerName: editingQuotation?.customerName || selectedDeal?.customer.name || '',
+        version: editingQuotation ? editingQuotation.version + 1 : 1,
+        createdBy: user?.id || '',
+        baseRate: selectedEquipmentBaseRate,
+        includeGst: formData.includeGst,
+        shift: formData.shift as 'single' | 'double',
+        dayNight: formData.dayNight as 'day' | 'night',
+        mobDemob: Number(formData.mobDemob),
+        mobRelaxation: Number(formData.mobRelaxation),
+        runningCostPerKm: selectedEquipment.runningCostPerKm,
       };
-      await createQuotation(quotationData);
+
+      if (editingQuotation) {
+        await updateQuotation(editingQuotation.id, quotationData);
+        showToast('Quotation updated successfully', 'success');
+      } else {
+        await createQuotation(quotationData);
+        showToast('Quotation created successfully', 'success');
+      }
+      
       await fetchQuotations();
       setIsCreateModalOpen(false);
-      showToast('Quotation created successfully', 'success');
+      setEditingQuotation(null);
     } catch (error) {
-      console.error('Error creating quotation:', error);
-      showToast('Error creating quotation', 'error');
+      console.error('Error saving quotation:', error);
+      showToast('Error saving quotation', 'error');
     }
   };
 
@@ -524,7 +578,7 @@ export function QuotationManagement() {
                         </div>
                       </div>
                       <div>
-                        <h4 className="font-medium text-gray-900">{quotation.customerName}</h4>
+                        <h4 className="font-medium text-gray-900">{quotation.customerName || 'Unnamed Customer'}</h4>
                         <p className="text-sm text-gray-500">
                           Created on {new Date(quotation.createdAt).toLocaleDateString()}
                         </p>
@@ -533,10 +587,10 @@ export function QuotationManagement() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <div className="text-lg font-semibold text-gray-900">
-                          {formatCurrency(quotation.totalRent)}
+                          {formatCurrency(quotation.totalRent || 0)}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {quotation.orderType.charAt(0).toUpperCase() + quotation.orderType.slice(1)} Order
+                          {(quotation.orderType?.charAt(0).toUpperCase() + quotation.orderType?.slice(1)) || 'Unknown'} Order
                         </div>
                       </div>
                       <ChevronRight
@@ -555,15 +609,19 @@ export function QuotationManagement() {
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Order Type:</span>
-                              <span className="font-medium">{quotation.orderType}</span>
+                              <span className="font-medium">{quotation.orderType || 'N/A'}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Duration:</span>
-                              <span className="font-medium">{quotation.numberOfDays} days</span>
+                              <span className="font-medium">{quotation.numberOfDays || 0} days</span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Working Hours:</span>
-                              <span className="font-medium">{quotation.workingHours} hrs/day</span>
+                              <span className="font-medium">{quotation.workingHours || 0} hrs/day</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Equipment:</span>
+                              <span className="font-medium">{quotation.selectedEquipment?.name || 'N/A'}</span>
                             </div>
                           </div>
                         </div>
@@ -572,42 +630,24 @@ export function QuotationManagement() {
                           <h5 className="font-medium text-gray-900">Cost Breakdown</h5>
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Base Rate:</span>
+                              <span className="font-medium">{formatCurrency(quotation.baseRate || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Extra Charges:</span>
-                              <span className="font-medium">{formatCurrency(quotation.extraCharge)}</span>
+                              <span className="font-medium">{formatCurrency(quotation.extraCharge || 0)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Incidental Charges:</span>
-                              <span className="font-medium">{formatCurrency(quotation.incidentalCharges)}</span>
+                              <span className="font-medium">{formatCurrency(quotation.incidentalCharges || 0)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Other Factors:</span>
-                              <span className="font-medium">{formatCurrency(quotation.otherFactorsCharge)}</span>
+                              <span className="font-medium">{formatCurrency(quotation.otherFactorsCharge || 0)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Total Rent:</span>
-                              <span className="font-medium">{formatCurrency(quotation.totalRent)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <h5 className="font-medium text-gray-900">Additional Charges</h5>
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Mob-Demob:</span>
-                              <span className="font-medium">{formatCurrency(quotation.mobDemobCost)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Risk Adjustment:</span>
-                              <span className="font-medium">{formatCurrency(quotation.riskAdjustment)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Extra Charges:</span>
-                              <span className="font-medium">{formatCurrency(quotation.extraCharges)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">GST (18%):</span>
-                              <span className="font-medium">{formatCurrency(quotation.gstAmount)}</span>
+                              <span className="font-medium">{formatCurrency(quotation.totalRent || 0)}</span>
                             </div>
                           </div>
                         </div>
@@ -617,12 +657,23 @@ export function QuotationManagement() {
                         <div className="flex justify-between items-center">
                           <span className="text-lg font-medium text-gray-900">Total Amount</span>
                           <span className="text-2xl font-bold text-primary-600">
-                            {formatCurrency(quotation.totalRent)}
+                            {formatCurrency(quotation.totalRent || 0)}
                           </span>
                         </div>
                       </div>
 
                       <div className="mt-4 flex justify-end gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<Edit size={16} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(quotation);
+                          }}
+                        >
+                          Edit
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -649,8 +700,11 @@ export function QuotationManagement() {
 
       <Modal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Create New Quotation"
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingQuotation(null);
+        }}
+        title={editingQuotation ? "Edit Quotation" : "Create New Quotation"}
         size="full"
       >
         <div className="max-w-7xl mx-auto">
@@ -1181,24 +1235,6 @@ export function QuotationManagement() {
                             className="h-full bg-primary-500 rounded-full transition-all duration-300"
                             style={{ 
                               width: `${(calculations.workingCost / calculations.totalAmount) * 100}%` 
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-primary-500" />
-                            <span className="text-sm font-medium">Elongation</span>
-                          </div>
-                          <span className="font-semibold">{formatCurrency(calculations.elongationCost)}</span>
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-secondary-500 rounded-full transition-all duration-300"
-                            style={{ 
-                              width: `${(calculations.elongationCost / calculations.totalAmount) * 100}%` 
                             }}
                           />
                         </div>
