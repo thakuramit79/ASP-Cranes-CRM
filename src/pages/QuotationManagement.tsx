@@ -87,6 +87,14 @@ const OTHER_FACTORS = [
 const FOOD_RATE_PER_MONTH = 2500;
 const ACCOMMODATION_RATE_PER_MONTH = 4000;
 
+const INCIDENTAL_OPTIONS = [
+  { value: 'incident1', label: 'Incident 1 - ₹5,000', amount: 5000 },
+  { value: 'incident2', label: 'Incident 2 - ₹10,000', amount: 10000 },
+  { value: 'incident3', label: 'Incident 3 - ₹15,000', amount: 15000 },
+];
+const RIGGER_AMOUNT = 40000;
+const HELPER_AMOUNT = 12000;
+
 interface FormData {
   numberOfDays: string;
   orderType: OrderType;
@@ -108,9 +116,8 @@ interface FormData {
   extraCharge: string;
   billing: string;
   riskFactor: string;
-  incidentalCharges: string;
+  incidentalCharges: string[];
   otherFactors: string[];
-  otherFactorsCharge: string;
   includeGst: boolean;
 }
 
@@ -172,9 +179,8 @@ export function QuotationManagement() {
     extraCharge: '',
     billing: 'gst',
     riskFactor: 'low',
-    incidentalCharges: '',
+    incidentalCharges: [],
     otherFactors: [],
-    otherFactorsCharge: '',
     includeGst: true,
   });
 
@@ -306,10 +312,17 @@ export function QuotationManagement() {
 
     const mobDemobCost = calculateMobDemobCost();
     const riskAdjustment = calculateRiskAdjustment(workingCost);
+    const incidentalChargesTotal = formData.incidentalCharges.reduce((sum, val) => {
+      const found = INCIDENTAL_OPTIONS.find(opt => opt.value === val);
+      return sum + (found ? found.amount : 0);
+    }, 0);
+    let otherFactorsTotal = 0;
+    if (formData.otherFactors.includes('rigger')) otherFactorsTotal += RIGGER_AMOUNT;
+    if (formData.otherFactors.includes('helper')) otherFactorsTotal += HELPER_AMOUNT;
     const extraCharges = (
       Number(formData.extraCharge) +
-      Number(formData.incidentalCharges) +
-      Number(formData.otherFactorsCharge)
+      incidentalChargesTotal +
+      otherFactorsTotal
     );
     
     const subtotal = (
@@ -388,23 +401,36 @@ export function QuotationManagement() {
 
     try {
       const selectedEquipment = availableEquipment.find(eq => eq.id === formData.selectedEquipment);
-      
       if (!selectedEquipment) {
         showToast('Please select equipment', 'error');
         return;
       }
-
+      let otherFactorsTotal = 0;
+      if (formData.otherFactors.includes('rigger')) otherFactorsTotal += RIGGER_AMOUNT;
+      if (formData.otherFactors.includes('helper')) otherFactorsTotal += HELPER_AMOUNT;
       const quotationData = {
-        customerId: selectedDeal.customerId,
-        customerName: selectedDeal.customer.name,
-        dealId: selectedDeal.id,
-        ...formData,
-        baseRate: selectedEquipmentBaseRate,
-        runningCostPerKm: selectedEquipment.runningCostPerKm,
-        calculations,
-        createdBy: user?.id || '',
+        orderType: formData.orderType,
+        numberOfDays: Number(formData.numberOfDays),
+        workingHours: Number(formData.workingHours),
+        selectedEquipment: {
+          id: selectedEquipment.id,
+          equipmentId: selectedEquipment.equipmentId,
+          name: selectedEquipment.name,
+          baseRates: selectedEquipment.baseRates,
+        },
+        foodResources: Number(formData.foodResources),
+        accomResources: Number(formData.accomResources),
+        siteDistance: Number(formData.siteDistance),
+        usage: formData.usage as 'normal' | 'heavy',
+        riskFactor: formData.riskFactor as 'low' | 'medium' | 'high',
+        extraCharge: Number(formData.extraCharge),
+        incidentalCharges: formData.incidentalCharges.reduce((sum, val) => {
+          const found = INCIDENTAL_OPTIONS.find(opt => opt.value === val);
+          return sum + (found ? found.amount : 0);
+        }, 0),
+        otherFactorsCharge: otherFactorsTotal,
+        billing: formData.billing as 'gst' | 'non_gst',
       };
-
       await createQuotation(quotationData);
       await fetchQuotations();
       setIsCreateModalOpen(false);
@@ -539,10 +565,6 @@ export function QuotationManagement() {
                               <span className="text-gray-500">Working Hours:</span>
                               <span className="font-medium">{quotation.workingHours} hrs/day</span>
                             </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Shift Type:</span>
-                              <span className="font-medium">{quotation.shift}</span>
-                            </div>
                           </div>
                         </div>
 
@@ -550,20 +572,20 @@ export function QuotationManagement() {
                           <h5 className="font-medium text-gray-900">Cost Breakdown</h5>
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Base Rate:</span>
-                              <span className="font-medium">{formatCurrency(quotation.baseRate)}</span>
+                              <span className="text-gray-500">Extra Charges:</span>
+                              <span className="font-medium">{formatCurrency(quotation.extraCharge)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Working Cost:</span>
-                              <span className="font-medium">{formatCurrency(quotation.workingCost)}</span>
+                              <span className="text-gray-500">Incidental Charges:</span>
+                              <span className="font-medium">{formatCurrency(quotation.incidentalCharges)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Elongation:</span>
-                              <span className="font-medium">{formatCurrency(quotation.elongationCost)}</span>
+                              <span className="text-gray-500">Other Factors:</span>
+                              <span className="font-medium">{formatCurrency(quotation.otherFactorsCharge)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Food & Accommodation:</span>
-                              <span className="font-medium">{formatCurrency(quotation.foodAccomCost)}</span>
+                              <span className="text-gray-500">Total Rent:</span>
+                              <span className="font-medium">{formatCurrency(quotation.totalRent)}</span>
                             </div>
                           </div>
                         </div>
@@ -1030,15 +1052,29 @@ export function QuotationManagement() {
                       <span>Risk rates: Low - 5% | Medium - 10% | High - 15% of base rate</span>
                     </div>
                     
-                    <Input
-                      type="number"
-                      label="Incidental Charges"
-                      value={formData.incidentalCharges}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        incidentalCharges: e.target.value 
-                      }))}
-                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Incidental Charges</label>
+                      <div className="space-y-2">
+                        {INCIDENTAL_OPTIONS.map(opt => (
+                          <label key={opt.value} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-50 transition-colors duration-200">
+                            <input
+                              type="checkbox"
+                              checked={formData.incidentalCharges.includes(opt.value)}
+                              onChange={e => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  incidentalCharges: e.target.checked
+                                    ? [...prev.incidentalCharges, opt.value]
+                                    : prev.incidentalCharges.filter(val => val !== opt.value)
+                                }));
+                              }}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-gray-700">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                     
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">Other Factors</label>
@@ -1048,7 +1084,7 @@ export function QuotationManagement() {
                             <input
                               type="checkbox"
                               checked={formData.otherFactors.includes(factor.value)}
-                              onChange={(e) => {
+                              onChange={e => {
                                 setFormData(prev => ({
                                   ...prev,
                                   otherFactors: e.target.checked
@@ -1058,21 +1094,15 @@ export function QuotationManagement() {
                               }}
                               className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                             />
-                            <span className="text-sm text-gray-700">{factor.label}</span>
+                            <span className="text-sm text-gray-700">
+                              {factor.label}
+                              {factor.value === 'rigger' && ' (₹40,000)'}
+                              {factor.value === 'helper' && ' (₹12,000)'}
+                            </span>
                           </label>
                         ))}
                       </div>
                     </div>
-                    
-                    <Input
-                      type="number"
-                      label="Other Factors Charge"
-                      value={formData.otherFactorsCharge}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        otherFactorsCharge: e.target.value 
-                      }))}
-                    />
                   </CardContent>
                 )}
               </Card>
@@ -1178,46 +1208,6 @@ export function QuotationManagement() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-primary-500" />
-                            <span className="text-sm font-medium">Mob - Demob</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">{formatCurrency(calculations.mobDemobCost)}</div>
-                            {formData.siteDistance && Number(formData.siteDistance) > 0 && (
-                              <div className="text-xs text-gray-500 space-y-1 mt-1">
-                                <div className="border-b pb-1">
-                                  <div>Distance: {formData.siteDistance} km</div>
-                                  <div>Running Cost: ₹{availableEquipment.find(eq => eq.id === formData.selectedEquipment)?.runningCostPerKm || 0}/km</div>
-                                  <div className="font-medium">Distance Cost: {formatCurrency(Number(formData.siteDistance) * (availableEquipment.find(eq => eq.id === formData.selectedEquipment)?.runningCostPerKm || 0) * 2)}</div>
-                                </div>
-                                {Number(formData.mobRelaxation) > 0 && (
-                                  <div className="border-b pb-1">
-                                    <div>Relaxation: {formData.mobRelaxation}%</div>
-                                    <div>Relaxation Amount: {formatCurrency((Number(formData.siteDistance) * (availableEquipment.find(eq => eq.id === formData.selectedEquipment)?.runningCostPerKm || 0) * 2 * Number(formData.mobRelaxation)) / 100)}</div>
-                                  </div>
-                                )}
-                                {Number(formData.mobDemob) > 0 && (
-                                  <div>
-                                    <div>Additional Trailer Cost: {formatCurrency(Number(formData.mobDemob))}</div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-accent-500 rounded-full transition-all duration-300"
-                            style={{ 
-                              width: `${(calculations.mobDemobCost / calculations.totalAmount) * 100}%` 
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-primary-500" />
                             <span className="text-sm font-medium">Food & Accommodation</span>
                           </div>
                           <span className="font-semibold">{formatCurrency(calculations.foodAccomCost)}</span>
@@ -1254,15 +1244,21 @@ export function QuotationManagement() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-primary-500" />
-                            <span className="text-sm font-medium">Extra Charges</span>
+                            <span className="text-sm font-medium">Incidental Charges</span>
                           </div>
-                          <span className="font-semibold">{formatCurrency(calculations.extraCharges)}</span>
+                          <span className="font-semibold">{formatCurrency(formData.incidentalCharges.reduce((sum, val) => {
+                            const found = INCIDENTAL_OPTIONS.find(opt => opt.value === val);
+                            return sum + (found ? found.amount : 0);
+                          }, 0))}</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-error-500 rounded-full transition-all duration-300"
-                            style={{ 
-                              width: `${(calculations.extraCharges / calculations.totalAmount) * 100}%` 
+                          <div
+                            className="h-full bg-warning-400 rounded-full transition-all duration-300"
+                            style={{
+                              width: `${((formData.incidentalCharges.reduce((sum, val) => {
+                                const found = INCIDENTAL_OPTIONS.find(opt => opt.value === val);
+                                return sum + (found ? found.amount : 0);
+                              }, 0)) / calculations.totalAmount) * 100}%`
                             }}
                           />
                         </div>
@@ -1272,20 +1268,33 @@ export function QuotationManagement() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-primary-500" />
-                            <span className="text-sm font-medium">Risk Adjustment ({formData.riskFactor === 'high' ? '15%' : formData.riskFactor === 'medium' ? '10%' : '5%'})</span>
+                            <span className="text-sm font-medium">Other Factors</span>
                           </div>
-                          <div className="text-right">
-                            <div>{formatCurrency(calculations.riskAdjustment)}</div>
-                            <div className="text-xs text-gray-500">
-                              Based on {formData.riskFactor} risk level
-                            </div>
-                          </div>
+                          <span className="font-semibold">{formatCurrency((formData.otherFactors.includes('rigger') ? RIGGER_AMOUNT : 0) + (formData.otherFactors.includes('helper') ? HELPER_AMOUNT : 0))}</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-primary-300 rounded-full transition-all duration-300"
-                            style={{ 
-                              width: `${(calculations.riskAdjustment / calculations.totalAmount) * 100}%` 
+                          <div
+                            className="h-full bg-success-400 rounded-full transition-all duration-300"
+                            style={{
+                              width: `${(((formData.otherFactors.includes('rigger') ? RIGGER_AMOUNT : 0) + (formData.otherFactors.includes('helper') ? HELPER_AMOUNT : 0)) / calculations.totalAmount) * 100}%`
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary-500" />
+                            <span className="text-sm font-medium">Commercial Charges</span>
+                          </div>
+                          <span className="font-semibold">{formatCurrency(Number(formData.extraCharge))}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-error-400 rounded-full transition-all duration-300"
+                            style={{
+                              width: `${((Number(formData.extraCharge) / calculations.totalAmount) * 100)}%`
                             }}
                           />
                         </div>
