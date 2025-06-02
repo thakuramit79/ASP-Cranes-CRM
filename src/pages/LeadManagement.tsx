@@ -70,6 +70,8 @@ export function LeadManagement() {
     variant?: 'success' | 'error' | 'warning';
   }>({ show: false, title: '' });
 
+  const today = new Date().toISOString().split('T')[0];
+
   const [formData, setFormData] = useState({
     fullName: '',
     companyName: '',
@@ -77,7 +79,7 @@ export function LeadManagement() {
     email: '',
     machineryType: '',
     location: '',
-    startDate: '',
+    startDate: today,
     rentalDays: '',
     shiftTiming: 'day',
     notes: '',
@@ -287,7 +289,7 @@ export function LeadManagement() {
       email: '',
       machineryType: '',
       location: '',
-      startDate: '',
+      startDate: today,
       rentalDays: '',
       shiftTiming: 'day',
       notes: '',
@@ -509,6 +511,7 @@ export function LeadManagement() {
               label="Start Date"
               type="date"
               value={formData.startDate}
+              min={today}
               onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
               required
             />
