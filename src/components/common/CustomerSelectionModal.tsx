@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, X } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Customer } from '../../types/lead';
 import { getCustomers, createCustomer } from '../../services/firestore/customerService';
+
+type ModalMode = 'select' | 'create';
 
 interface CustomerSelectionModalProps {
   isOpen: boolean;
@@ -14,6 +16,9 @@ interface CustomerSelectionModalProps {
     name: string;
     email: string;
     phone: string;
+    companyName?: string;
+    address?: string;
+    designation?: string;
   };
 }
 
@@ -23,7 +28,7 @@ export function CustomerSelectionModal({
   onSelect,
   initialCustomerData
 }: CustomerSelectionModalProps) {
-  const [mode, setMode] = useState<'select' | 'create'>('select');
+  const [mode, setMode] = useState<ModalMode>('select');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +36,9 @@ export function CustomerSelectionModal({
     name: initialCustomerData?.name || '',
     email: initialCustomerData?.email || '',
     phone: initialCustomerData?.phone || '',
-    address: ''
+    address: initialCustomerData?.address || '',
+    companyName: initialCustomerData?.companyName || '',
+    designation: initialCustomerData?.designation || ''
   });
 
   useEffect(() => {
@@ -51,8 +58,20 @@ export function CustomerSelectionModal({
   };
 
   const handleCreateCustomer = async () => {
+    if (!formData.name.trim()) {
+      alert('Customer Name is required');
+      return;
+    }
     try {
-      const newCustomer = await createCustomer(formData);
+      const newCustomer = await createCustomer({
+        ...formData,
+        name: formData.name.trim(),
+        companyName: formData.companyName.trim() || 'Korean.org',
+        email: formData.email.trim(),
+        phone: formData.phone.trim() || 'N/A',
+        address: formData.address.trim() || 'N/A',
+        designation: formData.designation.trim() || 'N/A'
+      });
       onSelect(newCustomer);
       onClose();
     } catch (error) {
@@ -70,28 +89,28 @@ export function CustomerSelectionModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Select or Create Customer"
-      size="lg"
+      title={mode === 'create' ? 'Add New Customer' : 'Select or Create Customer'}
+      size="md"
     >
-      <div className="space-y-6">
-        <div className="flex gap-4">
-          <Button
-            variant={mode === 'select' ? 'default' : 'outline'}
-            onClick={() => setMode('select')}
-            className="flex-1"
-          >
-            Select Existing Customer
-          </Button>
-          <Button
-            variant={mode === 'create' ? 'default' : 'outline'}
-            onClick={() => setMode('create')}
-            className="flex-1"
-          >
-            Create New Customer
-          </Button>
-        </div>
+      {mode === 'select' ? (
+        <div className="space-y-6">
+          <div className="flex gap-4">
+            <Button
+              variant="default"
+              onClick={() => setMode('select')}
+              className="flex-1"
+            >
+              Select Existing Customer
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setMode('create')}
+              className="flex-1"
+            >
+              Create New Customer
+            </Button>
+          </div>
 
-        {mode === 'select' ? (
           <div className="space-y-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -117,6 +136,12 @@ export function CustomerSelectionModal({
                   >
                     <div>
                       <div className="font-medium">{customer.name}</div>
+                      {customer.companyName && (
+                        <div className="text-sm text-gray-600">{customer.companyName}</div>
+                      )}
+                      {customer.designation && (
+                        <div className="text-sm text-gray-600">{customer.designation}</div>
+                      )}
                       <div className="text-sm text-gray-500">{customer.email}</div>
                       <div className="text-sm text-gray-500">{customer.customerId}</div>
                     </div>
@@ -126,41 +151,68 @@ export function CustomerSelectionModal({
               )}
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <Input
-              label="Company Name"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <Input
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              required
-            />
-            <Input
-              label="Phone"
-              value={formData.phone}
-              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              required
-            />
-            <Input
-              label="Address"
-              value={formData.address}
-              onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-              required
-            />
-            <div className="flex justify-end">
-              <Button onClick={handleCreateCustomer}>
-                Create Customer
-              </Button>
-            </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <Input
+            label="Customer Name"
+            value={formData.name}
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Enter customer name"
+            required
+          />
+          <Input
+            label="Company Name"
+            value={formData.companyName}
+            onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+            placeholder="Enter company name"
+            required
+          />
+          <Input
+            label="Designation"
+            value={formData.designation}
+            onChange={(e) => setFormData(prev => ({ ...prev, designation: e.target.value }))}
+            placeholder="Enter designation"
+            required
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            placeholder="Enter email address"
+            required
+          />
+          <Input
+            label="Phone"
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            placeholder="Enter phone number"
+            required
+          />
+          <Input
+            label="Address"
+            value={formData.address}
+            onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+            placeholder="Enter address"
+            required
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateCustomer}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              Add Customer
+            </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </Modal>
   );
 } 

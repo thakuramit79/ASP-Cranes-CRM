@@ -1,4 +1,14 @@
 import { OrderType } from './equipment';
+import { Equipment } from './equipment';
+
+export interface CustomerContact {
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  address: string;
+  designation?: string;
+}
 
 export interface QuotationInputs {
   orderType: OrderType;
@@ -38,9 +48,11 @@ export interface Quotation extends QuotationInputs {
   leadId: string;
   customerId: string;
   customerName: string;
+  customerContact: CustomerContact;
   totalRent: number;
   version: number;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected';
 }

@@ -22,21 +22,42 @@ const convertTimestampToISOString = (timestamp: Timestamp | string | null | unde
 
 export const getDeals = async (): Promise<Deal[]> => {
   try {
+    console.log('Fetching deals from Firestore...');
     const snapshot = await getDocs(dealsCollection);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: convertTimestampToISOString(doc.data().createdAt as Timestamp),
-      updatedAt: convertTimestampToISOString(doc.data().updatedAt as Timestamp),
-      expectedCloseDate: convertTimestampToISOString(doc.data().expectedCloseDate as Timestamp),
-    } as Deal));
+    console.log('Raw deals data:', snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    
+    const deals = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: convertTimestampToISOString(data.createdAt as Timestamp),
+        updatedAt: convertTimestampToISOString(data.updatedAt as Timestamp),
+        expectedCloseDate: convertTimestampToISOString(data.expectedCloseDate as Timestamp),
+        // Ensure required fields have default values
+        value: data.value || 0,
+        probability: data.probability || 0,
+        stage: data.stage || 'qualification',
+        customer: {
+          name: data.customer?.name || 'Unknown',
+          email: data.customer?.email || '',
+          phone: data.customer?.phone || '',
+          company: data.customer?.company || '',
+          address: data.customer?.address || '',
+          designation: data.customer?.designation || ''
+        }
+      } as Deal;
+    });
+    
+    console.log('Processed deals:', deals);
+    return deals;
   } catch (error) {
     console.error('Error fetching deals:', error);
     throw error;
   }
 };
 
-const createDeal = async (dealData: Omit<Deal, 'id' | 'createdAt' | 'updatedAt'>): Promise<Deal> => {
+export const createDeal = async (dealData: Omit<Deal, 'id' | 'createdAt' | 'updatedAt'>): Promise<Deal> => {
   try {
     const docRef = await addDoc(dealsCollection, {
       ...dealData,
@@ -84,7 +105,7 @@ export const updateDealStage = async (id: string, stage: DealStage): Promise<Dea
   }
 };
 
-const getDealById = async (id: string): Promise<Deal | null> => {
+export const getDealById = async (id: string): Promise<Deal | null> => {
   try {
     const dealRef = doc(dealsCollection, id);
     const docSnap = await getDoc(dealRef);

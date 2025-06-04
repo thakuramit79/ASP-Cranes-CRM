@@ -45,11 +45,15 @@ export function Deals() {
 
   const fetchDeals = async () => {
     try {
+      console.log('Fetching deals...');
       const data = await getDeals();
+      console.log('Deals fetched:', data);
       setDeals(data);
       setIsLoading(false);
     } catch (error) {
       console.error('Error fetching deals:', error);
+      showToast('Error fetching deals', 'error');
+      setIsLoading(false);
     }
   };
 
@@ -155,11 +159,9 @@ export function Deals() {
                   <div className="flex items-center text-gray-600">
                     <Building2 className="w-5 h-5 mr-2" />
                     <span>{deal.customer.name}</span>
-                  </div>
-                  
-                  <div className="flex items-center text-gray-600">
-                    <Users className="w-5 h-5 mr-2" />
-                    <span>{deal.contact.name}</span>
+                    {deal.customer.company && (
+                      <span className="ml-1 text-gray-400">({deal.customer.company})</span>
+                    )}
                   </div>
                   
                   <div className="flex items-center text-gray-600">

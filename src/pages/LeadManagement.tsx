@@ -25,7 +25,7 @@ import { CustomerSelectionModal } from '../components/common/CustomerSelectionMo
 import { useAuthStore } from '../store/authStore';
 import { Lead, LeadStatus, Customer } from '../types/lead';
 import { getLeads, createLead, updateLeadStatus, updateLeadAssignment } from '../services/firestore/leadService';
-import { createDeal } from '../services/firestore/dealService';
+import { createDeal } from '../services/dealService';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -84,6 +84,7 @@ export function LeadManagement() {
     shiftTiming: 'day',
     notes: '',
     assignedTo: '',
+    designation: '',
   });
 
   useEffect(() => {
@@ -185,6 +186,7 @@ export function LeadManagement() {
         assignedTo,
         assignedToName,
         notes: formData.notes,
+        designation: formData.designation,
       });
 
       setLeads(prev => [...prev, newLead]);
@@ -219,26 +221,36 @@ export function LeadManagement() {
     if (!selectedLead) return;
 
     try {
+      console.log('Creating deal from lead:', selectedLead);
+      console.log('Selected customer:', customer);
+      
       // Create a new deal from the lead with the selected customer
       const deal = await createDeal({
         title: `Deal for ${customer.name}`,
+        description: `Deal created from lead for ${customer.name}${customer.companyName ? ` (${customer.companyName})` : ''}`,
         leadId: selectedLead.id,
         customerId: customer.id,
-        contactId: '', // This will be set later in the deals form
         stage: 'qualification',
         value: 0, // This will be set in the deals form
         expectedCloseDate: new Date().toISOString(),
         customer: {
           name: customer.name,
-          email: customer.email,
+          email: customer.email || selectedLead.email,
+          phone: customer.phone || selectedLead.phone,
+          company: customer.companyName || '',
+          address: customer.address || '',
+          designation: customer.designation || 'N/A'
         },
-        contact: {
-          name: customer.name,
-          email: customer.email,
-          role: '',
-        },
+        probability: 0,
+        createdBy: user?.id || '',
+        assignedTo: selectedLead.assignedTo || user?.id || ''
       });
 
+      console.log('Deal created successfully:', deal);
+      
+      // Update lead status to qualified since it's been converted to a deal
+      await updateLeadStatus(selectedLead.id, 'qualified');
+      
       showToast('Lead converted to deal successfully', 'success');
       setIsCustomerSelectionModalOpen(false);
       setSelectedLead(null);
@@ -294,6 +306,7 @@ export function LeadManagement() {
       shiftTiming: 'day',
       notes: '',
       assignedTo: '',
+      designation: '',
     });
   };
 
@@ -545,6 +558,14 @@ export function LeadManagement() {
               required
             />
 
+            <Input
+              label="Designation"
+              value={formData.designation}
+              onChange={(e) => setFormData(prev => ({ ...prev, designation: e.target.value }))}
+              placeholder="Enter designation"
+              helperText="Optional"
+            />
+
             {/* Only show sales agent assignment for admin users */}
             {user?.role === 'admin' && (
               <Select
@@ -600,6 +621,9 @@ export function LeadManagement() {
           name: selectedLead.customerName,
           email: selectedLead.email,
           phone: selectedLead.phone,
+          companyName: selectedLead.companyName || 'Korean.org',
+          address: selectedLead.siteLocation || 'N/A',
+          designation: selectedLead.designation || 'Founder'
         } : undefined}
       />
 

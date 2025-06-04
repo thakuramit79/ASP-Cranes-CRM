@@ -46,73 +46,65 @@ export function Header() {
   const unreadCount = notifications.filter(n => !n.read).length;
   
   return (
-    <header className="bg-white shadow-sm z-10">
-      <div className="flex justify-between items-center px-4 py-4 md:px-6">
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-          {user?.role === 'sales_agent' && 'Sales Dashboard'}
-          {user?.role === 'operations_manager' && 'Operations Dashboard'}
-          {user?.role === 'operator' && 'Operator Dashboard'}
-        </h1>
-        
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <button
-              className="relative text-gray-500 hover:text-gray-700 focus:outline-none"
-              onClick={() => setShowNotifications(!showNotifications)}
-            >
-              <Bell size={20} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-error-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-dropdown overflow-hidden z-20">
-                <div className="p-3 border-b border-gray-100">
-                  <h3 className="text-sm font-semibold">Notifications</h3>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-gray-500">
-                      No notifications
-                    </div>
-                  ) : (
-                    <ul>
-                      {notifications.map((notification) => (
-                        <li 
-                          key={notification.id} 
-                          className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-                            notification.read ? 'bg-white' : 'bg-primary-50'
-                          }`}
-                          onClick={() => handleNotificationClick(notification)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{notification.title}</p>
-                              <p className="text-xs text-gray-500 mt-1">{notification.message}</p>
-                            </div>
-                            {!notification.read && (
-                              <Badge variant="primary" className="ml-2">New</Badge>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          
+    <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 md:px-6">
+      <div className="flex items-center">
+        {/* Logo removed */}
+      </div>
+      
+      <div className="flex items-center gap-4">
+        <div className="relative">
           <button
-            className="text-gray-500 hover:text-gray-700 focus:outline-none"
-            onClick={handleLogout}
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="p-2 hover:bg-gray-100 rounded-full relative"
           >
-            <LogOut size={20} />
+            <Bell className="h-5 w-5 text-gray-600" />
+            {unreadCount > 0 && (
+              <Badge variant="error" className="absolute -top-1 -right-1">
+                {unreadCount}
+              </Badge>
+            )}
           </button>
+          
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+              <div className="p-4">
+                <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
+                {notifications.length === 0 ? (
+                  <p className="mt-2 text-sm text-gray-500">No notifications</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        onClick={() => handleNotificationClick(notification)}
+                        className={`w-full text-left p-2 rounded-md hover:bg-gray-50 ${
+                          !notification.read ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <p className="text-sm font-medium text-gray-900">
+                          {notification.title}
+                        </p>
+                        {notification.message && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            {notification.message}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
+        
+        <button
+          onClick={handleLogout}
+          className="p-2 hover:bg-gray-100 rounded-full"
+          title="Logout"
+        >
+          <LogOut className="h-5 w-5 text-gray-600" />
+        </button>
       </div>
     </header>
   );

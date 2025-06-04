@@ -63,24 +63,25 @@ export const getCustomers = async (): Promise<Customer[]> => {
   }
 };
 
-export const createCustomer = async (customerData: Omit<Customer, 'id' | 'customerId' | 'createdAt' | 'updatedAt'>): Promise<Customer> => {
+export const createCustomer = async (customerData: Omit<Customer, 'id' | 'customerId'>): Promise<Customer> => {
   try {
-    // Generate the next customer ID
     const customerId = await generateNextCustomerId();
-    
-    const docRef = await addDoc(collection(db, CUSTOMERS_COLLECTION), {
+    const timestamp = new Date().toISOString();
+
+    const newCustomer = {
       ...customerData,
       customerId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-    
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      name: customerData.name.trim(),
+      companyName: customerData.companyName?.trim() || '',
+      designation: customerData.designation?.trim() || 'N/A'
+    };
+
+    const docRef = await addDoc(collection(db, CUSTOMERS_COLLECTION), newCustomer);
     return {
       id: docRef.id,
-      customerId,
-      ...customerData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      ...newCustomer
     };
   } catch (error) {
     console.error('Error creating customer:', error);
@@ -88,28 +89,71 @@ export const createCustomer = async (customerData: Omit<Customer, 'id' | 'custom
   }
 };
 
-export const updateCustomer = async (
-  customerId: string,
-  customerData: Partial<Omit<Customer, 'id' | 'customerId'>>
-): Promise<Customer> => {
+export const updateCustomer = async (id: string, customerData: Partial<Customer>): Promise<Customer> => {
   try {
-    const customerRef = doc(db, CUSTOMERS_COLLECTION, customerId);
-    const updatedAt = new Date().toISOString();
-    
-    await updateDoc(customerRef, {
+    const customerRef = doc(db, CUSTOMERS_COLLECTION, id);
+    const timestamp = new Date().toISOString();
+
+    const updateData = {
       ...customerData,
-      updatedAt
-    });
+      updatedAt: timestamp,
+      name: customerData.name?.trim(),
+      companyName: customerData.companyName?.trim(),
+      designation: customerData.designation?.trim()
+    };
+
+    await updateDoc(customerRef, updateData);
+
+    // Update related deals with new customer information
+    const dealsQuery = query(collection(db, 'deals'), where('customerId', '==', id));
+    const dealsSnapshot = await getDocs(dealsQuery);
     
-    // Get the full customer data
-    const docSnap = await getDoc(customerRef);
-    if (!docSnap.exists()) {
+    const dealUpdates = dealsSnapshot.docs.map(dealDoc => {
+      const dealRef = doc(db, 'deals', dealDoc.id);
+      return updateDoc(dealRef, {
+        customer: {
+          name: customerData.name?.trim() || dealDoc.data().customer.name,
+          email: customerData.email || dealDoc.data().customer.email,
+          phone: customerData.phone || dealDoc.data().customer.phone,
+          company: customerData.companyName?.trim() || dealDoc.data().customer.company,
+          address: customerData.address || dealDoc.data().customer.address,
+          designation: customerData.designation?.trim() || dealDoc.data().customer.designation || 'N/A'
+        },
+        updatedAt: timestamp
+      });
+    });
+
+    await Promise.all(dealUpdates);
+
+    // Update related quotations with new customer information
+    const quotationsQuery = query(collection(db, 'quotations'), where('customerId', '==', id));
+    const quotationsSnapshot = await getDocs(quotationsQuery);
+    
+    const quotationUpdates = quotationsSnapshot.docs.map(quotationDoc => {
+      const quotationRef = doc(db, 'quotations', quotationDoc.id);
+      return updateDoc(quotationRef, {
+        customerContact: {
+          name: customerData.name?.trim() || quotationDoc.data().customerContact.name,
+          email: customerData.email || quotationDoc.data().customerContact.email,
+          phone: customerData.phone || quotationDoc.data().customerContact.phone,
+          company: customerData.companyName?.trim() || quotationDoc.data().customerContact.company,
+          address: customerData.address || quotationDoc.data().customerContact.address,
+          designation: customerData.designation?.trim() || quotationDoc.data().customerContact.designation || 'N/A'
+        },
+        updatedAt: timestamp
+      });
+    });
+
+    await Promise.all(quotationUpdates);
+
+    const updatedDoc = await getDoc(customerRef);
+    if (!updatedDoc.exists()) {
       throw new Error('Customer not found');
     }
-    
+
     return {
-      id: docSnap.id,
-      ...docSnap.data()
+      id: updatedDoc.id,
+      ...updatedDoc.data()
     } as Customer;
   } catch (error) {
     console.error('Error updating customer:', error);

@@ -17,7 +17,8 @@ import {
   ChevronUp,
   Settings,
   ChevronRight,
-  Edit
+  Edit,
+  Plus
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
 import { Input } from '../components/common/Input';
@@ -33,7 +34,10 @@ import { createQuotation, getQuotations, updateQuotation } from '../services/quo
 import { formatCurrency } from '../utils/formatters';
 import { Equipment, CraneCategory, OrderType } from '../types/equipment';
 import { getEquipmentByCategory } from '../services/firestore/equipmentService';
-import { Quotation } from '../types/quotation';
+import { Quotation, CustomerContact } from '../types/quotation';
+import { CollapsibleCard } from '../components/common/CollapsibleCard';
+import { QuotationConfig } from '../components/config/QuotationConfig';
+import { getResourceRatesConfig } from '../services/configService';
 
 const ORDER_TYPES = [
   { value: 'micro', label: 'Micro' },
@@ -85,9 +89,6 @@ const OTHER_FACTORS = [
   { value: 'helper', label: 'Helper' },
 ];
 
-const FOOD_RATE_PER_MONTH = 2500;
-const ACCOMMODATION_RATE_PER_MONTH = 4000;
-
 const INCIDENTAL_OPTIONS = [
   { value: 'incident1', label: 'Incident 1 - ₹5,000', amount: 5000 },
   { value: 'incident2', label: 'Incident 2 - ₹10,000', amount: 10000 },
@@ -122,6 +123,54 @@ interface FormData {
   includeGst: boolean;
 }
 
+// Add a helper function to safely display customer contact info
+const SafeCustomerInfo = ({ quotation }: { quotation: Quotation }) => {
+  // Handle older quotations that might not have customerContact
+  const contact = quotation.customerContact || {
+    name: quotation.customerName,
+    email: '',
+    phone: '',
+    company: '',
+    address: '',
+  };
+
+  return (
+    <div className="space-y-3">
+      <h5 className="font-medium text-gray-900">Customer Information</h5>
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-500">Contact:</span>
+          <span className="font-medium">{contact.name || 'N/A'}</span>
+        </div>
+        {contact.company && (
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Company:</span>
+            <span className="font-medium">{contact.company}</span>
+          </div>
+        )}
+        {contact.phone && (
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Phone:</span>
+            <span className="font-medium">{contact.phone}</span>
+          </div>
+        )}
+        {contact.email && (
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Email:</span>
+            <span className="font-medium">{contact.email}</span>
+          </div>
+        )}
+        {contact.designation && (
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Designation:</span>
+            <span className="font-medium">{contact.designation}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export function QuotationManagement() {
   const { user } = useAuthStore();
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -151,6 +200,11 @@ export function QuotationManagement() {
   });
 
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const [resourceRates, setResourceRates] = useState({
+    foodRatePerMonth: 2500,
+    accommodationRatePerMonth: 4000
+  });
 
   const showToast = (
     title: string,
@@ -211,6 +265,7 @@ export function QuotationManagement() {
   useEffect(() => {
     fetchDeals();
     fetchQuotations();
+    fetchResourceRates();
   }, []);
 
   useEffect(() => {
@@ -256,6 +311,19 @@ export function QuotationManagement() {
     }
   };
 
+  const fetchResourceRates = async () => {
+    try {
+      const config = await getResourceRatesConfig();
+      setResourceRates({
+        foodRatePerMonth: config.foodRatePerMonth,
+        accommodationRatePerMonth: config.accommodationRatePerMonth
+      });
+    } catch (error) {
+      console.error('Error fetching resource rates:', error);
+      showToast('Error fetching resource rates', 'error');
+    }
+  };
+
   const calculateQuotation = () => {
     if (!formData.numberOfDays || !selectedEquipmentBaseRate) {
       setCalculations({
@@ -296,12 +364,12 @@ export function QuotationManagement() {
     let foodAccomCost;
     if (isMonthly) {
       foodAccomCost = (
-        (Number(formData.foodResources) * FOOD_RATE_PER_MONTH) +
-        (Number(formData.accomResources) * ACCOMMODATION_RATE_PER_MONTH)
+        (Number(formData.foodResources) * resourceRates.foodRatePerMonth) +
+        (Number(formData.accomResources) * resourceRates.accommodationRatePerMonth)
       );
     } else {
-      const foodDailyRate = FOOD_RATE_PER_MONTH / 26;
-      const accomDailyRate = ACCOMMODATION_RATE_PER_MONTH / 26;
+      const foodDailyRate = resourceRates.foodRatePerMonth / 26;
+      const accomDailyRate = resourceRates.accommodationRatePerMonth / 26;
       foodAccomCost = (
         (Number(formData.foodResources) * foodDailyRate +
         Number(formData.accomResources) * accomDailyRate) *
@@ -434,6 +502,16 @@ export function QuotationManagement() {
         return;
       }
 
+      // Get customer contact from the selected deal
+      const customerContact: CustomerContact = selectedDeal ? {
+        name: selectedDeal.customer.name,
+        email: selectedDeal.customer.email,
+        phone: selectedDeal.customer.phone,
+        company: selectedDeal.customer.company,
+        address: selectedDeal.customer.address,
+        designation: selectedDeal.customer.designation
+      } : editingQuotation!.customerContact;
+
       // Calculate charges
       let otherFactorsTotal = 0;
       if (formData.otherFactors.includes('rigger')) otherFactorsTotal += RIGGER_AMOUNT;
@@ -463,10 +541,10 @@ export function QuotationManagement() {
         incidentalCharges: incidentalChargesTotal,
         otherFactorsCharge: otherFactorsTotal,
         billing: formData.billing as 'gst' | 'non_gst',
-        // Add required fields from Quotation interface
         leadId: editingQuotation?.leadId || selectedDeal?.leadId || '',
         customerId: editingQuotation?.customerId || selectedDeal?.customerId || '',
         customerName: editingQuotation?.customerName || selectedDeal?.customer.name || '',
+        customerContact: customerContact,
         version: editingQuotation ? editingQuotation.version + 1 : 1,
         createdBy: user?.id || '',
         baseRate: selectedEquipmentBaseRate,
@@ -476,6 +554,7 @@ export function QuotationManagement() {
         mobDemob: Number(formData.mobDemob),
         mobRelaxation: Number(formData.mobRelaxation),
         runningCostPerKm: selectedEquipment.runningCostPerKm,
+        status: 'draft'
       };
 
       if (editingQuotation) {
@@ -520,36 +599,43 @@ export function QuotationManagement() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div className="flex-1">
-          <Select
-            label="Select Deal"
-            options={[
-              { value: '', label: 'Select a deal in qualification stage...' },
-              ...deals.map(deal => ({
-                value: deal.id,
-                label: `${deal.customer.name} - ${deal.title} (${formatCurrency(deal.value)})`,
-              }))
-            ]}
-            value={selectedDeal?.id || ''}
-            onChange={(value) => {
-              const deal = deals.find(d => d.id === value);
-              setSelectedDeal(deal || null);
-            }}
-          />
-          {!deals.length && (
-            <div className="mt-2 text-sm text-gray-500">
-              No deals in qualification stage available. Move deals to qualification stage to create quotations.
-            </div>
-          )}
-        </div>
-        
-        <Button
-          onClick={() => setIsCreateModalOpen(true)}
+        <h1 className="text-2xl font-semibold text-gray-900">Quotation Management</h1>
+        <Button 
+          onClick={() => {
+            if (!selectedDeal) {
+              showToast('Please select a deal first', 'warning');
+              return;
+            }
+            setIsCreateModalOpen(true);
+          }} 
+          leftIcon={<Plus size={16} />}
           disabled={!selectedDeal}
-          leftIcon={<Calculator size={16} />}
         >
-          New Quotation
+          Create Quotation
         </Button>
+      </div>
+
+      <div className="flex-1">
+        <Select
+          label="Select Deal"
+          options={[
+            { value: '', label: 'Select a deal in qualification stage...' },
+            ...deals.map(deal => ({
+              value: deal.id,
+              label: `${deal.customer.name} - ${deal.title} (${formatCurrency(deal.value)})`
+            }))
+          ]}
+          value={selectedDeal?.id || ''}
+          onChange={(value) => {
+            const deal = deals.find(d => d.id === value);
+            setSelectedDeal(deal || null);
+          }}
+        />
+        {!deals.length && (
+          <div className="mt-2 text-sm text-gray-500">
+            No deals in qualification stage available. Move deals to qualification stage to create quotations.
+          </div>
+        )}
       </div>
 
       <Card>
@@ -590,7 +676,7 @@ export function QuotationManagement() {
                           {formatCurrency(quotation.totalRent || 0)}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {(quotation.orderType?.charAt(0).toUpperCase() + quotation.orderType?.slice(1)) || 'Unknown'} Order
+                          {quotation.orderType ? (quotation.orderType.charAt(0).toUpperCase() + quotation.orderType.slice(1)) : 'Unknown'} Order
                         </div>
                       </div>
                       <ChevronRight
@@ -604,6 +690,8 @@ export function QuotationManagement() {
                   {expandedRows[quotation.id] && (
                     <div className="border-t bg-gray-50 p-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <SafeCustomerInfo quotation={quotation} />
+
                         <div className="space-y-3">
                           <h5 className="font-medium text-gray-900">Basic Information</h5>
                           <div className="space-y-2">
@@ -655,7 +743,13 @@ export function QuotationManagement() {
 
                       <div className="mt-6 pt-4 border-t border-gray-200">
                         <div className="flex justify-between items-center">
-                          <span className="text-lg font-medium text-gray-900">Total Amount</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">Status:</span>
+                            <StatusBadge 
+                              status={quotation.status || 'draft'} 
+                              className="capitalize"
+                            />
+                          </div>
                           <span className="text-2xl font-bold text-primary-600">
                             {formatCurrency(quotation.totalRent || 0)}
                           </span>
@@ -708,6 +802,58 @@ export function QuotationManagement() {
         size="full"
       >
         <div className="max-w-7xl mx-auto">
+          {/* Add Customer Information Card */}
+          {(selectedDeal || editingQuotation) && (
+            <Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <Users className="w-5 h-5 text-gray-500" />
+                  <CardTitle className="text-lg font-medium">Customer Information</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-500">Customer Name</div>
+                    <div className="font-medium">
+                      {editingQuotation?.customerContact.name || selectedDeal?.customer.name || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-500">Company</div>
+                    <div className="font-medium">
+                      {editingQuotation?.customerContact.company || selectedDeal?.customer.company || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-500">Designation</div>
+                    <div className="font-medium">
+                      {editingQuotation?.customerContact.designation || selectedDeal?.customer.designation || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-500">Email</div>
+                    <div className="font-medium">
+                      {editingQuotation?.customerContact.email || selectedDeal?.customer.email || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-500">Phone</div>
+                    <div className="font-medium">
+                      {editingQuotation?.customerContact.phone || selectedDeal?.customer.phone || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-500">Address</div>
+                    <div className="font-medium">
+                      {editingQuotation?.customerContact.address || selectedDeal?.customer.address || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-12 gap-6">
             <div className="col-span-7 space-y-6">
               <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
@@ -985,7 +1131,7 @@ export function QuotationManagement() {
                         onChange={(e) => setFormData(prev => ({ ...prev, foodResources: e.target.value }))}
                       />
                       <div className="text-sm text-gray-500 mt-1">
-                        Rate: ₹{FOOD_RATE_PER_MONTH}/month per person
+                        Rate: ₹{resourceRates.foodRatePerMonth}/month per person
                       </div>
                     </div>
                     <div>
@@ -996,7 +1142,7 @@ export function QuotationManagement() {
                         onChange={(e) => setFormData(prev => ({ ...prev, accomResources: e.target.value }))}
                       />
                       <div className="text-sm text-gray-500 mt-1">
-                        Rate: ₹{ACCOMMODATION_RATE_PER_MONTH}/month per person
+                        Rate: ₹{resourceRates.accommodationRatePerMonth}/month per person
                       </div>
                     </div>
                   </CardContent>

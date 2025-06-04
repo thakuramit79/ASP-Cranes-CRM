@@ -21,6 +21,7 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { motion } from 'framer-motion';
 import { Button } from '../common/Button';
+import logo from '../../assets/asp-logo.jpg';
 
 interface NavItem {
   label: string;
@@ -139,12 +140,12 @@ export function Sidebar() {
   
   return (
     <>
-      <button
-        className="fixed top-4 left-4 z-40 md:hidden bg-white p-2 rounded-md shadow-sm"
-        onClick={toggleMobileMenu}
-      >
-        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      <div
+        className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-200 ${
+          isMobileMenuOpen ? 'opacity-100 lg:hidden' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
       
       <motion.div
         className={`fixed inset-0 z-30 md:hidden ${isMobileMenuOpen ? 'block' : 'hidden'}`}
@@ -166,11 +167,77 @@ export function Sidebar() {
       </motion.div>
       
       <aside 
-        className={`hidden md:block ${
-          isCollapsed ? 'w-16' : 'w-64'
-        } bg-white shadow-sm overflow-y-auto transition-all duration-300`}
+        className={`
+          fixed lg:sticky top-0 left-0 h-screen
+          w-72 bg-white border-r border-gray-200
+          transform transition-transform duration-200
+          ${isCollapsed ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}
+          z-50 lg:z-0
+        `}
       >
-        {renderSidebarContent(isCollapsed)}
+        <div className="flex flex-col h-full">
+          <div className="flex items-center justify-between p-6">
+            <Link to="/dashboard" className="flex items-center">
+              <img 
+                src={logo} 
+                alt="ASP Cranes" 
+                className="h-16 w-auto object-contain"
+              />
+            </Link>
+            <button
+              className="p-2 rounded-md hover:bg-gray-100 lg:hidden"
+              onClick={() => setIsCollapsed(false)}
+            >
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
+          </div>
+          
+          <nav className="flex-1 overflow-y-auto py-4">
+            <ul className="space-y-1">
+              {filteredNavItems.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    to={item.href}
+                    className={`flex items-center ${
+                      isCollapsed ? 'justify-center' : 'space-x-3'
+                    } px-3 py-2 rounded-md transition-colors group relative ${
+                      isActive(item.href, item.end)
+                        ? 'bg-primary-50 text-primary-700'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.icon}
+                    {!isCollapsed && <span>{item.label}</span>}
+                    {isCollapsed && (
+                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transform translate-x-2 group-hover:translate-x-0 transition-all">
+                        {item.label}
+                      </div>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          
+          <div className={`p-4 border-t mt-auto ${isCollapsed ? 'text-center' : ''}`}>
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
+              <div className="flex-shrink-0">
+                <img
+                  src={user?.avatar || 'https://images.pexels.com/photos/4126743/pexels-photo-4126743.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'}
+                  alt={user?.name || 'User'}
+                  className="h-9 w-9 rounded-full object-cover"
+                />
+              </div>
+              {!isCollapsed && user && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                  <p className="text-xs text-gray-500 truncate capitalize">{user.role.replace('_', ' ')}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </aside>
     </>
   );
@@ -182,15 +249,15 @@ export function Sidebar() {
           <div className={`flex items-center ${collapsed ? '' : 'space-x-2'}`}>
             {collapsed ? (
               <img 
-                src="/crane-icon.svg" 
+                src={logo} 
                 alt="ASP Cranes" 
-                className="h-8 w-8 object-contain"
+                className="h-16 w-auto object-contain"
               />
             ) : (
               <img 
-                src="/crane-icon.svg" 
+                src={logo} 
                 alt="ASP Cranes" 
-                className="h-12 w-auto object-contain"
+                className="h-16 w-auto object-contain"
               />
             )}
           </div>
@@ -238,12 +305,12 @@ export function Sidebar() {
           <div className={`flex items-center ${collapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="flex-shrink-0">
               <img
-                src={user.avatar || 'https://images.pexels.com/photos/4126743/pexels-photo-4126743.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'}
-                alt={user.name}
+                src={user?.avatar || 'https://images.pexels.com/photos/4126743/pexels-photo-4126743.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'}
+                alt={user?.name || 'User'}
                 className="h-9 w-9 rounded-full object-cover"
               />
             </div>
-            {!collapsed && (
+            {!collapsed && user && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
                 <p className="text-xs text-gray-500 truncate capitalize">{user.role.replace('_', ' ')}</p>

@@ -51,6 +51,8 @@ export function Customers() {
     email: '',
     phone: '',
     address: '',
+    companyName: '',
+    designation: '',
   });
 
   useEffect(() => {
@@ -133,6 +135,8 @@ export function Customers() {
       email: '',
       phone: '',
       address: '',
+      companyName: '',
+      designation: '',
     });
     setSelectedCustomer(null);
   };
@@ -217,6 +221,14 @@ export function Customers() {
                           <MapPin className="h-4 w-4 mr-2" />
                           <span className="text-sm">{customer.address}</span>
                         </div>
+                        <div className="flex items-center text-gray-600">
+                          <Building2 className="h-4 w-4 mr-2" />
+                          <span className="text-sm">{customer.companyName || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center text-gray-600">
+                          <Users className="h-4 w-4 mr-2" />
+                          <span className="text-sm">{customer.designation || 'N/A'}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -231,6 +243,8 @@ export function Customers() {
                             email: customer.email,
                             phone: customer.phone,
                             address: customer.address,
+                            companyName: customer.companyName || '',
+                            designation: customer.designation || '',
                           });
                           setIsModalOpen(true);
                         }}
@@ -292,9 +306,23 @@ export function Customers() {
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <Input
-            label="Company Name"
+            label="Customer Name"
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            required
+          />
+
+          <Input
+            label="Company Name"
+            value={formData.companyName}
+            onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+            required
+          />
+
+          <Input
+            label="Designation"
+            value={formData.designation}
+            onChange={(e) => setFormData(prev => ({ ...prev, designation: e.target.value }))}
             required
           />
 

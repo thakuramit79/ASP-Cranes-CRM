@@ -14,7 +14,7 @@ import { JobSummaryFeedback } from './pages/JobSummaryFeedback';
 import { EquipmentManagement } from './pages/EquipmentManagement';
 import { ServicesManagement } from './pages/ServicesManagement';
 import { UserManagement } from './pages/UserManagement';
-import { Configuration } from './pages/Configuration';
+import { Config } from './pages/Config';
 import { Customers } from './pages/Customers';
 import { Deals } from './pages/Deals';
 import { useAuthStore } from './store/authStore';
@@ -59,7 +59,7 @@ function App() {
           <Route path="site-assessment" element={<SiteAssessment />} />
           <Route path="job-summary/:id" element={<JobSummaryFeedback />} />
           
-          <Route path="config" element={<Configuration />} />
+          <Route path="config" element={<Config />} />
           <Route path="config/users" element={<UserManagement />} />
           <Route path="config/equipment" element={<EquipmentManagement />} />
           <Route path="config/services" element={<ServicesManagement />} />

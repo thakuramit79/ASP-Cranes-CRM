@@ -2,23 +2,25 @@ export type DealStage = 'qualification' | 'proposal' | 'negotiation' | 'won' | '
 
 export interface Deal {
   id: string;
-  title: string;
   leadId: string;
   customerId: string;
-  contactId: string;
-  stage: DealStage;
-  value: number;
-  expectedCloseDate: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
   customer: {
     name: string;
     email: string;
+    phone: string;
+    company: string;
+    address: string;
+    designation?: string;
   };
-  contact: {
-    name: string;
-    email: string;
-    role: string;
-  };
+  title: string;
+  description: string;
+  value: number;
+  stage: DealStage;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  assignedTo: string;
+  probability: number;
+  expectedCloseDate: string;
+  notes?: string;
 }
