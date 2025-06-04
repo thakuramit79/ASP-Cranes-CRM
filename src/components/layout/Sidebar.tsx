@@ -106,10 +106,10 @@ const navItems: NavItem[] = [
     roles: ['admin', 'operations_manager'],
   },
   {
-    label: 'Analytics',
-    icon: <BarChart3 size={20} />,
-    href: '/analytics',
-    roles: ['admin', 'sales_agent', 'operations_manager'],
+    label: 'Templates',
+    icon: <FileText size={20} />,
+    href: '/templates',
+    roles: ['admin', 'sales_agent'],
   },
 ];
 
@@ -156,7 +156,7 @@ export function Sidebar() {
       >
         <div className="absolute inset-0 bg-black/50" onClick={toggleMobileMenu} />
         <motion.aside
-          className="absolute left-0 top-0 bottom-0 w-64 bg-white shadow-lg overflow-y-auto"
+          className="absolute left-0 top-0 bottom-0 w-60 bg-white shadow-lg overflow-y-auto"
           initial={{ x: '-100%' }}
           animate={{ x: 0 }}
           exit={{ x: '-100%' }}
@@ -169,7 +169,7 @@ export function Sidebar() {
       <aside 
         className={`
           fixed lg:sticky top-0 left-0 h-screen
-          w-72 bg-white border-r border-gray-200
+          w-60 bg-white border-r border-gray-200
           transform transition-transform duration-200
           ${isCollapsed ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}
           z-50 lg:z-0

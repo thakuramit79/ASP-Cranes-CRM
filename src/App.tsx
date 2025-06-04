@@ -18,6 +18,7 @@ import { Config } from './pages/Config';
 import { Customers } from './pages/Customers';
 import { Deals } from './pages/Deals';
 import { useAuthStore } from './store/authStore';
+import { QuotationTemplates } from './pages/QuotationTemplates';
 
 function DashboardRouter() {
   const { user } = useAuthStore();
@@ -65,7 +66,7 @@ function App() {
           <Route path="config/services" element={<ServicesManagement />} />
           
           <Route path="feedback" element={<JobSummaryFeedback />} />
-          <Route path="analytics" element={<div className="p-4">Analytics Page</div>} />
+          <Route path="templates" element={<QuotationTemplates />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/dashboard\" replace />} />

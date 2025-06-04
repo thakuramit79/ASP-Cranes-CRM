@@ -178,21 +178,46 @@ export function AdminDashboard() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <Link to="/quotations">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<FileText size={16} />}>Quotation</Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Link to="/quotations" className="group">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary-500 transition-colors"
+                  >
+                    <FileText size={20} className="text-gray-500 group-hover:text-primary-500" />
+                    <span>Quotation</span>
+                  </Button>
                 </Link>
-                <Link to="/equipment">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<Truck size={16} />}>Equipment</Button>
+                <Link to="/config/equipment" className="group">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary-500 transition-colors"
+                  >
+                    <Truck size={20} className="text-gray-500 group-hover:text-primary-500" />
+                    <span>Equipment</span>
+                  </Button>
                 </Link>
-                <Link to="/customers">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<Users size={16} />}>Customers</Button>
+                <Link to="/customers" className="group">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary-500 transition-colors"
+                  >
+                    <Users size={20} className="text-gray-500 group-hover:text-primary-500" />
+                    <span>Customers</span>
+                  </Button>
                 </Link>
-                <Link to="/jobs">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<Calendar size={16} />}>Jobs</Button>
-                </Link>
-                <Link to="/reports">
-                  <Button variant="outline" size="sm" fullWidth leftIcon={<BarChart3 size={16} />}>Reports</Button>
+                <Link to="/jobs" className="group">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full h-auto py-3 px-4 flex flex-col items-center gap-2 hover:border-primary-500 transition-colors"
+                  >
+                    <Calendar size={20} className="text-gray-500 group-hover:text-primary-500" />
+                    <span>Jobs</span>
+                  </Button>
                 </Link>
               </div>
             </CardContent>

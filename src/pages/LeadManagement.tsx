@@ -364,13 +364,13 @@ export function LeadManagement() {
           <CardTitle>Lead Pipeline</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+        {isLoading ? (
             <div className="text-center py-4">Loading leads...</div>
-          ) : filteredLeads.length === 0 ? (
+        ) : filteredLeads.length === 0 ? (
             <div className="text-center py-4 text-gray-500">
               No leads found. Create a new lead to get started.
-            </div>
-          ) : (
+          </div>
+        ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -402,7 +402,7 @@ export function LeadManagement() {
                         <div>
                           <div className="font-medium text-gray-900">{lead.customerName}</div>
                           {lead.companyName && (
-                            <div className="text-sm text-gray-500">{lead.companyName}</div>
+                  <div className="text-sm text-gray-500">{lead.companyName}</div>
                           )}
                         </div>
                       </td>

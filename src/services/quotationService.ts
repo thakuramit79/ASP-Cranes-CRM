@@ -104,32 +104,19 @@ const calculateTotalRent = (quotationData: QuotationInputs): number => {
 // Create quotation
 export const createQuotation = async (quotationData: Omit<Quotation, 'id' | 'createdAt' | 'updatedAt'>): Promise<Quotation> => {
   try {
-    // Get latest deal information to ensure customer data is up to date
-    const deal = await getDealById(quotationData.leadId);
-    if (!deal) {
-      throw new Error('Deal not found');
-    }
-
-    // Use the latest customer information from the deal
-    const updatedQuotationData = {
+    const timestamp = new Date().toISOString();
+    const newQuotation = {
       ...quotationData,
-      customerContact: {
-        name: deal.customer.name,
-        email: deal.customer.email,
-        phone: deal.customer.phone,
-        company: deal.customer.company,
-        address: deal.customer.address,
-        designation: deal.customer.designation
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      totalRent: calculateTotalRent(quotationData)
     };
 
-    const docRef = await addDoc(quotationsCollection, updatedQuotationData);
+    const docRef = await addDoc(quotationsCollection, newQuotation);
     
     return {
       id: docRef.id,
-      ...updatedQuotationData
+      ...newQuotation
     };
   } catch (error) {
     console.error('Error creating quotation:', error);

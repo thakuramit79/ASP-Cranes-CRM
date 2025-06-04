@@ -33,6 +33,13 @@ const ORDER_TYPES = [
   { value: 'yearly', label: 'Yearly' },
 ] as const;
 
+const RATE_LABELS = {
+  micro: 'per hour',
+  small: 'per hour',
+  monthly: 'per month',
+  yearly: 'per month'
+} as const;
+
 export function EquipmentManagement() {
   const { user } = useAuthStore();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -154,6 +161,7 @@ export function EquipmentManagement() {
           monthly: Number(formData.baseRates.monthly),
           yearly: Number(formData.baseRates.yearly),
         } as BaseRates,
+        runningCost: Number(formData.runningCostPerKm),
         runningCostPerKm: Number(formData.runningCostPerKm),
       };
 
@@ -230,7 +238,7 @@ export function EquipmentManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-col sm:flex-row gap-4 flex-1">
           <div className="relative flex-1">
@@ -243,25 +251,26 @@ export function EquipmentManagement() {
             />
           </div>
 
-          <Select
-            options={[
-              { value: 'all', label: 'All Categories' },
-              ...CATEGORY_OPTIONS,
-            ]}
-            value={categoryFilter}
-            onChange={(value) => setCategoryFilter(value as 'all' | CraneCategory)}
-            className="w-48"
-          />
-
-          <Select
-            options={[
-              { value: 'all', label: 'All Status' },
-              ...STATUS_OPTIONS,
-            ]}
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value as 'all' | Equipment['status'])}
-            className="w-40"
-          />
+          <div className="flex gap-4">
+            <Select
+              value={categoryFilter}
+              onChange={(value) => setCategoryFilter(value as 'all' | CraneCategory)}
+              options={[
+                { value: 'all', label: 'All Categories' },
+                ...CATEGORY_OPTIONS,
+              ]}
+              className="w-48"
+            />
+            <Select
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value as 'all' | Equipment['status'])}
+              options={[
+                { value: 'all', label: 'All Status' },
+                ...STATUS_OPTIONS,
+              ]}
+              className="w-48"
+            />
+          </div>
         </div>
 
         <Button
@@ -269,7 +278,7 @@ export function EquipmentManagement() {
             resetForm();
             setIsModalOpen(true);
           }}
-          leftIcon={<Plus size={16} />}
+          leftIcon={<Plus className="w-4 h-4" />}
         >
           Add Equipment
         </Button>
@@ -333,9 +342,7 @@ export function EquipmentManagement() {
                             }
                             className="w-full justify-center"
                           >
-                            {item.status === 'available' ? 'Available' :
-                             item.status === 'in_use' ? 'In Use' :
-                             'Maintenance'}
+                            {STATUS_OPTIONS.find(opt => opt.value === item.status)?.label}
                           </Badge>
                         </div>
                       </td>
@@ -355,31 +362,39 @@ export function EquipmentManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 min-w-[300px]">
                         <div className="text-sm">
-                          <div className="bg-gray-50 rounded-lg p-3">
-                            <div className="font-medium text-gray-700 mb-2">Base Rates</div>
-                            <div className="space-y-1.5">
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="font-medium text-gray-900 mb-3">Base Rates</div>
+                            <div className="space-y-2.5">
                               {ORDER_TYPES.map(type => (
-                                <div key={type.value} className="flex items-center">
-                                  <span className="w-20 text-gray-500">{type.label}</span>
-                                  <span className="flex items-center">
-                                    <IndianRupee className="h-3.5 w-3.5 text-gray-400 mr-0.5" />
-                                    <span className="font-medium">{formatCurrency(item.baseRates[type.value])}</span>
-                                    <span className="text-gray-500 ml-1">/hr</span>
-                                  </span>
+                                <div key={type.value} className="grid grid-cols-[100px,1fr] items-baseline">
+                                  <span className="text-gray-600">{type.label}</span>
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="text-gray-400 text-sm">₹</span>
+                                    <span className="text-gray-900 font-medium">
+                                      {formatCurrency(item.baseRates[type.value])}
+                                    </span>
+                                    <span className="text-gray-500 text-sm">
+                                      {type.value === 'monthly' || type.value === 'yearly' ? (
+                                        <div>per<br />month</div>
+                                      ) : (
+                                        'per hour'
+                                      )}
+                                    </span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
                           </div>
-                          <div className="mt-2 flex items-center text-gray-600">
-                            <Truck className="h-4 w-4 text-gray-400 mr-2" />
-                            <span className="text-gray-500">Running:</span>
-                            <span className="flex items-center ml-2">
-                              <IndianRupee className="h-3.5 w-3.5 text-gray-400 mr-0.5" />
-                              <span className="font-medium">{formatCurrency(item.runningCostPerKm)}</span>
-                              <span className="text-gray-500 ml-1">/km</span>
-                            </span>
+                          <div className="mt-3 flex items-center gap-2 text-gray-600">
+                            <Truck className="h-4 w-4" />
+                            <span>Running:</span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-gray-400">₹</span>
+                              <span className="text-gray-900">{formatCurrency(item.runningCostPerKm)}</span>
+                              <span className="text-gray-500">/km</span>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -395,32 +410,33 @@ export function EquipmentManagement() {
                                 category: item.category,
                                 manufacturingDate: item.manufacturingDate,
                                 registrationDate: item.registrationDate,
-                                maxLiftingCapacity: item.maxLiftingCapacity.toString(),
-                                unladenWeight: item.unladenWeight.toString(),
+                                maxLiftingCapacity: String(item.maxLiftingCapacity),
+                                unladenWeight: String(item.unladenWeight),
                                 baseRates: {
-                                  micro: item.baseRates.micro.toString(),
-                                  small: item.baseRates.small.toString(),
-                                  monthly: item.baseRates.monthly.toString(),
-                                  yearly: item.baseRates.yearly.toString(),
+                                  micro: String(item.baseRates.micro),
+                                  small: String(item.baseRates.small),
+                                  monthly: String(item.baseRates.monthly),
+                                  yearly: String(item.baseRates.yearly),
                                 },
-                                runningCostPerKm: item.runningCostPerKm.toString(),
+                                runningCostPerKm: String(item.runningCostPerKm),
                                 description: item.description || '',
                                 status: item.status,
                               });
                               setIsModalOpen(true);
                             }}
                           >
-                            <Edit2 size={16} />
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="text-error-600 hover:text-error-700 hover:bg-error-50"
                             onClick={() => {
                               setSelectedEquipment(item);
                               setIsDeleteModalOpen(true);
                             }}
                           >
-                            <Trash2 size={16} />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
@@ -433,116 +449,221 @@ export function EquipmentManagement() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Equipment Modal */}
       <Modal
+        title={selectedEquipment ? 'Edit Equipment' : 'Add Equipment'}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
           resetForm();
         }}
-        title={selectedEquipment ? 'Edit Equipment' : 'Add New Equipment'}
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Input
-            label="Equipment Name"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            required
-          />
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="grid grid-cols-2 gap-8">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Name
+              </label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <Select
-            label="Category"
-            options={CATEGORY_OPTIONS}
-            value={formData.category}
-            onChange={(value) => setFormData(prev => ({ ...prev, category: value as CraneCategory }))}
-            required
-          />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Max Lifting Capacity (tons)
+              </label>
+              <Input
+                type="number"
+                value={formData.maxLiftingCapacity}
+                onChange={(e) => setFormData({ ...formData, maxLiftingCapacity: e.target.value })}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Manufacturing Date (YYYY-MM)"
-              value={formData.manufacturingDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, manufacturingDate: e.target.value }))}
-              placeholder="2024-01"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Category
+              </label>
+              <Select
+                value={formData.category}
+                onChange={(value) => setFormData({ ...formData, category: value as CraneCategory })}
+                options={CATEGORY_OPTIONS}
+                className="w-full"
+              />
+            </div>
 
-            <Input
-              label="Registration Date (YYYY-MM)"
-              value={formData.registrationDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, registrationDate: e.target.value }))}
-              placeholder="2024-01"
-              required
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Unladen Weight (tons)
+              </label>
+              <Input
+                type="number"
+                value={formData.unladenWeight}
+                onChange={(e) => setFormData({ ...formData, unladenWeight: e.target.value })}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Max Lifting Capacity (tons)"
-              type="number"
-              step="0.1"
-              value={formData.maxLiftingCapacity}
-              onChange={(e) => setFormData(prev => ({ ...prev, maxLiftingCapacity: e.target.value }))}
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Manufacturing Date (YYYY-MM)
+              </label>
+              <Input
+                type="text"
+                value={formData.manufacturingDate}
+                onChange={(e) => setFormData({ ...formData, manufacturingDate: e.target.value })}
+                placeholder="YYYY-MM"
+                required
+                className="w-full"
+              />
+            </div>
 
-            <Input
-              label="Unladen Weight (tons)"
-              type="number"
-              step="0.1"
-              value={formData.unladenWeight}
-              onChange={(e) => setFormData(prev => ({ ...prev, unladenWeight: e.target.value }))}
-              required
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Running Cost (₹/km)
+              </label>
+              <Input
+                type="number"
+                value={formData.runningCostPerKm}
+                onChange={(e) => setFormData({ ...formData, runningCostPerKm: e.target.value })}
+                required
+                className="w-full"
+              />
+            </div>
 
-          <div className="space-y-4">
-            <div className="font-medium text-gray-700">Base Rates per Hour (₹)</div>
-            <div className="grid grid-cols-2 gap-4">
-              {ORDER_TYPES.map(type => (
-                <Input
-                  key={type.value}
-                  label={`${type.label} Rate`}
-                  type="number"
-                  step="0.01"
-                  value={formData.baseRates[type.value]}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    baseRates: {
-                      ...prev.baseRates,
-                      [type.value]: e.target.value
-                    }
-                  }))}
-                  required
-                />
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Registration Date (YYYY-MM)
+              </label>
+              <Input
+                type="text"
+                value={formData.registrationDate}
+                onChange={(e) => setFormData({ ...formData, registrationDate: e.target.value })}
+                placeholder="YYYY-MM"
+                required
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <Select
+                value={formData.status}
+                onChange={(value) => setFormData({ ...formData, status: value as Equipment['status'] })}
+                options={STATUS_OPTIONS}
+                className="w-full"
+              />
             </div>
           </div>
 
-          <Input
-            label="Running Cost per km (₹)"
-            type="number"
-            step="0.01"
-            value={formData.runningCostPerKm}
-            onChange={(e) => setFormData(prev => ({ ...prev, runningCostPerKm: e.target.value }))}
-            required
-          />
+          <div className="border-t pt-6">
+            <h4 className="text-base font-medium text-gray-900 mb-4">Base Rates</h4>
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Micro Rate (₹ per hour)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.baseRates.micro}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      baseRates: {
+                        ...formData.baseRates,
+                        micro: e.target.value,
+                      },
+                    })
+                  }
+                  required
+                  className="w-full"
+                />
+              </div>
 
-          <Select
-            label="Status"
-            options={STATUS_OPTIONS}
-            value={formData.status}
-            onChange={(value) => setFormData(prev => ({ ...prev, status: value as Equipment['status'] }))}
-            required
-          />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Small Rate (₹ per hour)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.baseRates.small}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      baseRates: {
+                        ...formData.baseRates,
+                        small: e.target.value,
+                      },
+                    })
+                  }
+                  required
+                  className="w-full"
+                />
+              </div>
 
-          <TextArea
-            label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            rows={3}
-          />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Monthly Rate (₹ per month)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.baseRates.monthly}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      baseRates: {
+                        ...formData.baseRates,
+                        monthly: e.target.value,
+                      },
+                    })
+                  }
+                  required
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Yearly Rate (₹ per month)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.baseRates.yearly}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      baseRates: {
+                        ...formData.baseRates,
+                        yearly: e.target.value,
+                      },
+                    })
+                  }
+                  required
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <TextArea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              rows={3}
+              className="w-full"
+            />
+          </div>
 
           <div className="flex justify-end gap-3">
             <Button
@@ -556,27 +677,22 @@ export function EquipmentManagement() {
               Cancel
             </Button>
             <Button type="submit">
-              {selectedEquipment ? 'Update' : 'Add'} Equipment
+              {selectedEquipment ? 'Update Equipment' : 'Add Equipment'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal
+        title="Delete Equipment"
         isOpen={isDeleteModalOpen}
         onClose={() => {
           setIsDeleteModalOpen(false);
           setSelectedEquipment(null);
         }}
-        title="Delete Equipment"
-        size="sm"
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
-            Are you sure you want to delete this equipment? This action cannot be undone.
-          </p>
-
+          <p>Are you sure you want to delete this equipment? This action cannot be undone.</p>
           <div className="flex justify-end gap-3">
             <Button
               variant="outline"
@@ -587,25 +703,19 @@ export function EquipmentManagement() {
             >
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              Delete
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete Equipment
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* Toast Notifications */}
-      {toast.show && (
-        <Toast
-          title={toast.title}
-          variant={toast.variant}
-          isVisible={toast.show}
-          onClose={() => setToast({ show: false, title: '' })}
-        />
-      )}
+      <Toast
+        title={toast.title}
+        variant={toast.variant}
+        isVisible={toast.show}
+        onClose={() => setToast({ show: false, title: '' })}
+      />
     </div>
   );
 }

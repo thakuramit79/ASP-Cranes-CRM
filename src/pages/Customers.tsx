@@ -163,8 +163,8 @@ export function Customers() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center mb-6">
         <div className="flex-1 max-w-md relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
           <Input
@@ -198,41 +198,42 @@ export function Customers() {
             const customerContacts = contacts[customer.id] || [];
 
             return (
-              <Card key={customer.id}>
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
+              <Card key={customer.id} className="flex flex-col">
+                <CardContent className="p-6 flex-1">
+                  <div className="flex flex-col h-full">
+                    <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-semibold">{customer.name}</h3>
+                        <h3 className="text-lg font-semibold truncate">{customer.name}</h3>
                         <Badge variant="outline" className="text-xs">
                           {customer.customerId}
                         </Badge>
                       </div>
-                      <div className="mt-4 space-y-2">
-                        <div className="flex items-center text-gray-600">
-                          <Mail className="h-4 w-4 mr-2" />
-                          <span className="text-sm">{customer.email}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <Phone className="h-4 w-4 mr-2" />
-                          <span className="text-sm">{customer.phone}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <MapPin className="h-4 w-4 mr-2" />
-                          <span className="text-sm">{customer.address}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <Building2 className="h-4 w-4 mr-2" />
-                          <span className="text-sm">{customer.companyName || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center text-gray-600">
-                          <Users className="h-4 w-4 mr-2" />
-                          <span className="text-sm">{customer.designation || 'N/A'}</span>
-                        </div>
+                    </div>
+
+                    <div className="space-y-3 flex-1">
+                      <div className="flex items-center text-gray-600">
+                        <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="text-sm truncate">{customer.email}</span>
+                      </div>
+                      <div className="flex items-center text-gray-600">
+                        <Phone className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="text-sm truncate">{customer.phone}</span>
+                      </div>
+                      <div className="flex items-center text-gray-600">
+                        <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="text-sm truncate">{customer.address}</span>
+                      </div>
+                      <div className="flex items-center text-gray-600">
+                        <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="text-sm truncate">{customer.companyName || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center text-gray-600">
+                        <Users className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="text-sm truncate">{customer.designation || 'N/A'}</span>
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -249,44 +250,21 @@ export function Customers() {
                           setIsModalOpen(true);
                         }}
                       >
-                        <Edit2 size={16} />
+                        <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="text-error-600 hover:text-error-700 hover:bg-error-50"
                         onClick={() => {
                           setSelectedCustomer(customer);
                           setIsDeleteModalOpen(true);
                         }}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-
-                  {customerContacts.length > 0 && (
-                    <div className="mt-6 pt-4 border-t">
-                      <h4 className="text-sm font-medium text-gray-700 mb-3">
-                        Contacts
-                      </h4>
-                      <div className="space-y-3">
-                        {customerContacts.map((contact) => (
-                          <div
-                            key={contact.id}
-                            className="bg-gray-50 rounded-lg p-3"
-                          >
-                            <div className="font-medium">{contact.name}</div>
-                            <div className="text-sm text-gray-500 mt-1">
-                              {contact.role}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {contact.email}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             );
