@@ -1,99 +1,108 @@
 import React, { useState } from 'react';
-import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
-import { Plus, FileText, Edit2, Trash2, Copy, Eye } from 'lucide-react';
-import { QuotationTemplate } from '../types/quotationTemplate';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { QuotationTemplate } from '../components/quotations/QuotationTemplate';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Quotation } from '../types/quotation';
+import { Template } from '../types/template';
+import { Plus, FileText, Edit2, Trash2, Copy } from 'lucide-react';
 import { TemplateEditor } from '../components/quotations/TemplateEditor';
-import { TemplatePreviewer } from '../components/quotations/TemplatePreviewer';
 
-const defaultTemplate: QuotationTemplate = {
+// Sample quotation data for preview
+const sampleQuotation: Quotation = {
+  id: 'SAMPLE001',
+  leadId: 'LEAD001',
+  customerId: 'CUST001',
+  customerName: 'ABC Construction Ltd.',
+  version: 1,
+  status: 'draft',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  createdBy: 'ADMIN001',
+  customerContact: {
+    name: 'John Doe',
+    designation: 'Project Manager',
+    company: 'ABC Construction Ltd.',
+    address: '456 Building Site, Construction Zone, Mumbai 400001',
+    phone: '+91 98765 43210',
+    email: 'john.doe@abcconstruction.com'
+  },
+  selectedEquipment: {
+    id: 'crane1',
+    equipmentId: 'EQ001',
+    name: 'Hydraulic Crane XL2000',
+    baseRates: {
+      micro: 1000,
+      small: 1500,
+      monthly: 25000,
+      yearly: 250000
+    }
+  },
+  numberOfDays: 30,
+  workingHours: 8,
+  shift: 'single',
+  dayNight: 'day',
+  baseRate: 2500,
+  orderType: 'monthly',
+  siteDistance: 50,
+  runningCostPerKm: 100,
+  mobRelaxation: 10,
+  mobDemob: 9000,
+  foodResources: 2,
+  accomResources: 2,
+  extraCharge: 5000,
+  includeGst: true,
+  totalRent: 150000,
+  usage: 'normal',
+  riskFactor: 'low',
+  incidentalCharges: 0,
+  otherFactorsCharge: 0,
+  billing: 'gst'
+};
+
+const defaultTemplate: Template = {
   id: 'default',
   name: 'Default Template',
   description: 'Standard quotation template with company branding',
-  elements: [
-    {
-      id: 'header',
-      type: 'image',
-      imageUrl: '/logo.png',
-      style: {
-        alignment: 'center',
-        marginBottom: '20px'
-      }
-    },
-    {
-      id: 'title',
-      type: 'heading',
-      content: 'Quotation',
-      style: {
-        fontSize: '24px',
-        fontWeight: 'bold',
-        alignment: 'center',
-        marginBottom: '30px'
-      }
-    },
-    {
-      id: 'quotationDetails',
-      type: 'table',
-      tableData: {
-        headers: ['Description', 'Quantity', 'Rate', 'Amount'],
-        widths: ['40%', '20%', '20%', '20%']
-      },
-      dynamicField: 'items'
-    }
-  ],
-  branding: {
-    primaryColor: '#1a56db',
-    secondaryColor: '#e2e8f0',
-    fontFamily: 'Arial'
-  },
-  layout: {
-    pageSize: 'A4',
-    orientation: 'portrait',
-    margins: {
-      top: 40,
-      right: 40,
-      bottom: 40,
-      left: 40
-    }
-  },
+  isDefault: true,
   createdAt: new Date(),
   updatedAt: new Date(),
-  isDefault: true
+  quotationData: sampleQuotation
 };
 
-export function QuotationTemplates() {
-  const [templates, setTemplates] = useState<QuotationTemplate[]>([defaultTemplate]);
-  const [selectedTemplate, setSelectedTemplate] = useState<QuotationTemplate | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPreviewing, setIsPreviewing] = useState(false);
+export default function QuotationTemplates() {
+  const [templates, setTemplates] = useState<Template[]>([defaultTemplate]);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const handleCreateTemplate = () => {
-    const newTemplate: QuotationTemplate = {
-      ...defaultTemplate,
+    const newTemplate: Template = {
       id: `template-${Date.now()}`,
       name: 'New Template',
       description: 'Custom quotation template',
       isDefault: false,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      quotationData: { ...sampleQuotation }
     };
     setTemplates([...templates, newTemplate]);
     setSelectedTemplate(newTemplate);
-    setIsEditing(true);
+    setIsEditOpen(true);
   };
 
-  const handleEditTemplate = (template: QuotationTemplate) => {
+  const handleEditTemplate = (template: Template) => {
     setSelectedTemplate(template);
-    setIsEditing(true);
+    setIsEditOpen(true);
   };
 
-  const handlePreviewTemplate = (template: QuotationTemplate) => {
+  const handlePreviewTemplate = (template: Template) => {
     setSelectedTemplate(template);
-    setIsPreviewing(true);
+    setIsPreviewOpen(true);
   };
 
-  const handleDuplicateTemplate = (template: QuotationTemplate) => {
-    const duplicatedTemplate: QuotationTemplate = {
+  const handleDuplicateTemplate = (template: Template) => {
+    const duplicatedTemplate: Template = {
       ...template,
       id: `template-${Date.now()}`,
       name: `${template.name} (Copy)`,
@@ -112,118 +121,122 @@ export function QuotationTemplates() {
     setTemplates(templates.filter(t => t.id !== templateId));
   };
 
-  const handleSaveTemplate = (updatedTemplate: QuotationTemplate) => {
+  const handleSaveTemplate = (updatedTemplate: Template) => {
     setTemplates(templates.map(t => 
       t.id === updatedTemplate.id ? updatedTemplate : t
     ));
-    setIsEditing(false);
+    setIsEditOpen(false);
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quotation Templates</h1>
-          <p className="text-gray-500 mt-1">
-            Manage and customize your quotation templates
-          </p>
+          <h1 className="text-2xl font-bold">Quotation Templates</h1>
+          <p className="text-gray-500 mt-1">Manage and customize your quotation templates</p>
         </div>
-        <Button
+        <Button 
           onClick={handleCreateTemplate}
-          leftIcon={<Plus className="w-4 h-4" />}
-          variant="default"
-          size="lg"
-          className="bg-primary-600 text-white hover:bg-primary-700"
+          className="flex items-center gap-2"
         >
+          <Plus className="w-4 h-4" />
           Create Template
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map(template => (
-          <Card key={template.id} className="flex flex-col hover:border-primary-500 transition-colors">
-            <div className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-primary-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 truncate">
-                    {template.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 line-clamp-2">
-                    {template.description}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
-                    <span>Last updated: {new Date(template.updatedAt).toLocaleDateString()}</span>
-                    {template.isDefault && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-50 text-primary-700">
-                        Default
-                      </span>
-                    )}
+          <Card key={template.id}>
+            <CardContent className="p-6">
+              <div className="aspect-[3/4] bg-gray-50 rounded-lg mb-4 p-4 flex items-center justify-center">
+                <div className="w-full h-full relative overflow-hidden">
+                  <div className="transform scale-[0.4] origin-top-left absolute top-0 left-0">
+                    <QuotationTemplate quotation={template.quotationData} />
                   </div>
                 </div>
               </div>
-
-              <div className="mt-6 flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePreviewTemplate(template)}
-                  leftIcon={<Eye className="w-4 h-4" />}
-                  className="flex-1"
-                >
-                  Preview
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEditTemplate(template)}
-                  leftIcon={<Edit2 className="w-4 h-4" />}
-                  className="flex-1"
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDuplicateTemplate(template)}
-                  leftIcon={<Copy className="w-4 h-4" />}
-                  className="flex-1"
-                >
-                  Duplicate
-                </Button>
-                {!template.isDefault && (
-                  <Button
-                    variant="outline"
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    {template.name}
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">{template.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    variant="outline" 
                     size="sm"
-                    onClick={() => handleDeleteTemplate(template.id)}
-                    leftIcon={<Trash2 className="w-4 h-4" />}
-                    className="flex-1 text-error-600 hover:bg-error-50 hover:border-error-300"
+                    className="flex-1"
+                    onClick={() => handlePreviewTemplate(template)}
                   >
-                    Delete
+                    Preview
                   </Button>
-                )}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handleEditTemplate(template)}
+                  >
+                    <Edit2 className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => handleDuplicateTemplate(template)}
+                  >
+                    <Copy className="w-4 h-4 mr-1" />
+                    Duplicate
+                  </Button>
+                  {!template.isDefault && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex-1 text-red-600 hover:text-red-700"
+                      onClick={() => handleDeleteTemplate(template.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
+            </CardContent>
           </Card>
         ))}
       </div>
 
-      {isEditing && selectedTemplate && (
-        <TemplateEditor
-          template={selectedTemplate}
-          onSave={handleSaveTemplate}
-          onCancel={() => setIsEditing(false)}
-        />
-      )}
+      {/* Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Template Preview - {selectedTemplate?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-y-auto max-h-[80vh]">
+            {selectedTemplate && (
+              <QuotationTemplate quotation={selectedTemplate.quotationData} />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-      {isPreviewing && selectedTemplate && (
-        <TemplatePreviewer
-          template={selectedTemplate}
-          onClose={() => setIsPreviewing(false)}
-        />
-      )}
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{selectedTemplate?.isDefault ? 'View Template' : 'Edit Template'}</DialogTitle>
+          </DialogHeader>
+          {selectedTemplate && (
+            <TemplateEditor
+              template={selectedTemplate}
+              onSave={handleSaveTemplate}
+              onCancel={() => setIsEditOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

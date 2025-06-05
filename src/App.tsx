@@ -18,7 +18,7 @@ import { Config } from './pages/Config';
 import { Customers } from './pages/Customers';
 import { Deals } from './pages/Deals';
 import { useAuthStore } from './store/authStore';
-import { QuotationTemplates } from './pages/QuotationTemplates';
+import QuotationTemplates from './pages/QuotationTemplates';
 
 function DashboardRouter() {
   const { user } = useAuthStore();
