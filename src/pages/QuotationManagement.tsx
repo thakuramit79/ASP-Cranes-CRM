@@ -27,14 +27,15 @@ import { Select } from '../components/common/Select';
 import { Modal } from '../components/common/Modal';
 import { Toast } from '../components/common/Toast';
 import { StatusBadge } from '../components/common/StatusBadge';
-import { QuotationTemplate } from '../components/quotations/QuotationTemplate';
+import { TemplatePreview } from '../components/quotations/TemplatePreview';
 import { useAuthStore } from '../store/authStore';
 import { Quotation } from '../types/quotation';
 import { Template } from '../types/template';
 import { Deal } from '../types/deal';
 import { getQuotations } from '../services/quotationService';
 import { getDeals } from '../services/dealService';
-import { getDefaultTemplateConfig } from '../services/configService';
+import { getDefaultTemplateConfig, getTemplateById } from '../services/configService';
+import { mergeQuotationWithTemplate } from '../utils/templateMerger';
 import { formatCurrency } from '../utils/formatters';
 
 const STATUS_OPTIONS = [
@@ -55,6 +56,7 @@ export function QuotationManagement() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
+  const [defaultTemplate, setDefaultTemplate] = useState<Template | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -90,11 +92,26 @@ export function QuotationManagement() {
         deal.stage === 'qualification' || deal.stage === 'proposal'
       );
       setDeals(qualifiedDeals);
+
+      // Load default template
+      await loadDefaultTemplate();
     } catch (error) {
       console.error('Error fetching data:', error);
       showToast('Error fetching data', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadDefaultTemplate = async () => {
+    try {
+      const config = await getDefaultTemplateConfig();
+      if (config.defaultTemplateId) {
+        const template = await getTemplateById(config.defaultTemplateId);
+        setDefaultTemplate(template);
+      }
+    } catch (error) {
+      console.error('Error loading default template:', error);
     }
   };
 
@@ -144,108 +161,17 @@ export function QuotationManagement() {
     setSelectedDealId('');
   };
 
-  const getDefaultTemplate = async (): Promise<Template | null> => {
-    try {
-      // Get the default template configuration
-      const config = await getDefaultTemplateConfig();
-      
-      if (!config.defaultTemplateId) {
-        showToast('No default template configured', 'warning', 'Please set a default template in Configuration settings.');
-        return null;
-      }
-
-      // Load templates from localStorage
-      const savedTemplates = localStorage.getItem('quotation-templates');
-      if (!savedTemplates) {
-        showToast('No templates found', 'error', 'Please create templates first.');
-        return null;
-      }
-
-      const templates: Template[] = JSON.parse(savedTemplates);
-      const defaultTemplate = templates.find(t => t.id === config.defaultTemplateId);
-
-      if (!defaultTemplate) {
-        showToast('Default template not found', 'error', 'The configured default template no longer exists.');
-        return null;
-      }
-
-      return defaultTemplate;
-    } catch (error) {
-      console.error('Error getting default template:', error);
-      showToast('Error loading template', 'error');
-      return null;
-    }
-  };
-
-  const generateQuotationContent = (quotation: Quotation, template: Template): string => {
-    let content = template.content;
-
-    // Define the data mapping for template placeholders
-    const templateData = {
-      // Customer information
-      customer_name: quotation.customerContact?.name || 'N/A',
-      customer_email: quotation.customerContact?.email || 'N/A',
-      customer_phone: quotation.customerContact?.phone || 'N/A',
-      customer_company: quotation.customerContact?.company || 'N/A',
-      customer_address: quotation.customerContact?.address || 'N/A',
-      customer_designation: quotation.customerContact?.designation || 'N/A',
-
-      // Quotation information
-      quotation_id: quotation.id.slice(0, 8).toUpperCase(),
-      quotation_date: new Date(quotation.createdAt).toLocaleDateString('en-IN'),
-      valid_until: new Date(new Date(quotation.createdAt).setDate(new Date(quotation.createdAt).getDate() + 30)).toLocaleDateString('en-IN'),
-
-      // Equipment information
-      equipment_name: quotation.selectedEquipment?.name || 'N/A',
-      equipment_capacity: `${quotation.selectedEquipment?.name || 'N/A'}`,
-      project_duration: `${quotation.numberOfDays} days`,
-      working_hours: `${quotation.workingHours} hours/day`,
-      shift_type: quotation.shift === 'double' ? 'Double Shift' : 'Single Shift',
-      day_night: quotation.dayNight === 'day' ? 'Day Shift' : 'Night Shift',
-
-      // Pricing information
-      total_amount: formatCurrency(quotation.totalRent),
-      base_rate: formatCurrency(quotation.baseRate),
-      site_location: quotation.customerContact?.address || 'N/A',
-
-      // Company information
-      company_name: 'ASP Cranes',
-      company_address: '123 Industrial Area, Mumbai, Maharashtra 400001',
-      company_phone: '+91 22 1234 5678',
-      company_email: 'info@aspcranes.com',
-      company_gst: '27AABCS1429B1ZB',
-
-      // Additional details
-      order_type: quotation.orderType.charAt(0).toUpperCase() + quotation.orderType.slice(1),
-      usage_type: quotation.usage === 'heavy' ? 'Heavy Usage' : 'Normal Usage',
-      risk_factor: quotation.riskFactor.charAt(0).toUpperCase() + quotation.riskFactor.slice(1) + ' Risk',
-      site_distance: `${quotation.siteDistance} km`,
-      mob_demob_cost: formatCurrency(quotation.mobDemob),
-      food_resources: quotation.foodResources.toString(),
-      accommodation_resources: quotation.accomResources.toString(),
-      extra_charges: formatCurrency(quotation.extraCharge),
-      gst_applicable: quotation.includeGst ? 'Yes' : 'No'
-    };
-
-    // Replace all placeholders with actual data
-    Object.entries(templateData).forEach(([key, value]) => {
-      const placeholder = `{{${key}}}`;
-      content = content.replaceAll(placeholder, value);
-    });
-
-    return content;
-  };
-
   const handleDownloadPDF = async (quotation: Quotation) => {
     try {
       setIsGeneratingPDF(true);
       
-      const template = await getDefaultTemplate();
-      if (!template) {
+      if (!defaultTemplate) {
+        showToast('No default template configured', 'warning', 'Please set a default template in Configuration settings.');
         return;
       }
 
-      const content = generateQuotationContent(quotation, template);
+      // Use the template merger utility
+      const content = mergeQuotationWithTemplate(quotation, defaultTemplate);
       
       // Create a new window with the content for PDF generation
       const printWindow = window.open('', '_blank');
@@ -312,12 +238,13 @@ export function QuotationManagement() {
     try {
       setIsSendingEmail(true);
       
-      const template = await getDefaultTemplate();
-      if (!template) {
+      if (!defaultTemplate) {
+        showToast('No default template configured', 'warning', 'Please set a default template in Configuration settings.');
         return;
       }
 
-      const content = generateQuotationContent(quotation, template);
+      // Use the template merger utility
+      const content = mergeQuotationWithTemplate(quotation, defaultTemplate);
       
       // Simulate sending email (in a real app, this would call an API)
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -482,6 +409,7 @@ export function QuotationManagement() {
                               setIsPreviewOpen(true);
                             }}
                             title="Preview"
+                            disabled={!defaultTemplate}
                           >
                             <Eye size={16} />
                           </Button>
@@ -490,7 +418,7 @@ export function QuotationManagement() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDownloadPDF(quotation)}
-                            disabled={isGeneratingPDF}
+                            disabled={isGeneratingPDF || !defaultTemplate}
                             title="Download PDF"
                           >
                             <Download size={16} />
@@ -500,7 +428,7 @@ export function QuotationManagement() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleSendToCustomer(quotation)}
-                            disabled={isSendingEmail}
+                            disabled={isSendingEmail || !defaultTemplate}
                             title="Send to Customer"
                           >
                             <Send size={16} />
@@ -743,20 +671,21 @@ export function QuotationManagement() {
                   setIsPreviewOpen(true);
                 }}
                 leftIcon={<Eye size={16} />}
+                disabled={!defaultTemplate}
               >
                 Preview Template
               </Button>
               <Button
                 variant="outline"
                 onClick={() => handleDownloadPDF(selectedQuotation)}
-                disabled={isGeneratingPDF}
+                disabled={isGeneratingPDF || !defaultTemplate}
                 leftIcon={<Download size={16} />}
               >
                 {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
               </Button>
               <Button
                 onClick={() => handleSendToCustomer(selectedQuotation)}
-                disabled={isSendingEmail}
+                disabled={isSendingEmail || !defaultTemplate}
                 leftIcon={<Send size={16} />}
               >
                 {isSendingEmail ? 'Sending...' : 'Send to Customer'}
@@ -774,28 +703,22 @@ export function QuotationManagement() {
           setSelectedQuotation(null);
         }}
         title="Quotation Preview"
-        size="xl"
+        size="full"
       >
-        {selectedQuotation && (
-          <div className="space-y-4">
-            <QuotationTemplate quotation={selectedQuotation} />
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => handleDownloadPDF(selectedQuotation)}
-                disabled={isGeneratingPDF}
-                leftIcon={<Download size={16} />}
-              >
-                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
-              </Button>
-              <Button
-                onClick={() => handleSendToCustomer(selectedQuotation)}
-                disabled={isSendingEmail}
-                leftIcon={<Send size={16} />}
-              >
-                {isSendingEmail ? 'Sending...' : 'Send to Customer'}
-              </Button>
-            </div>
+        {selectedQuotation && defaultTemplate && (
+          <TemplatePreview
+            template={defaultTemplate}
+            quotation={selectedQuotation}
+            onDownloadPDF={() => handleDownloadPDF(selectedQuotation)}
+            onSendEmail={() => handleSendToCustomer(selectedQuotation)}
+          />
+        )}
+        {selectedQuotation && !defaultTemplate && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No default template configured.</p>
+            <p className="text-sm text-gray-400 mt-2">
+              Please set a default template in Configuration settings to preview quotations.
+            </p>
           </div>
         )}
       </Modal>
