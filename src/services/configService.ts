@@ -280,3 +280,19 @@ export const updateDefaultTemplateConfig = async (templateId: string): Promise<D
     throw error;
   }
 };
+
+// Template retrieval helper
+export const getTemplateById = async (templateId: string) => {
+  try {
+    const savedTemplates = localStorage.getItem('quotation-templates');
+    if (!savedTemplates) {
+      return null;
+    }
+
+    const templates = JSON.parse(savedTemplates);
+    return templates.find((template: any) => template.id === templateId) || null;
+  } catch (error) {
+    console.error('Error getting template by ID:', error);
+    return null;
+  }
+};
