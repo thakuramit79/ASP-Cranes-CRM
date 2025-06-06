@@ -38,7 +38,7 @@ function DashboardRouter() {
     case 'operator':
       return <OperatorDashboard />;
     default:
-      return <Navigate to="/login" replace />;
+      return <Navigate to="/login\" replace />;
   }
 }
 
@@ -49,7 +49,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         
         <Route path="/" element={<AppShell />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<Navigate to="/dashboard\" replace />} />
           <Route path="dashboard" element={<DashboardRouter />} />
           
           <Route path="leads" element={<LeadManagement />} />
@@ -71,7 +71,7 @@ function App() {
           <Route path="templates" element={<QuotationTemplates />} />
         </Route>
         
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard\" replace />} />
       </Routes>
     </Router>
   );
