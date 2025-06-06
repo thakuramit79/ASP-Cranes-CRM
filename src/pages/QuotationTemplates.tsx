@@ -177,9 +177,9 @@ export default function QuotationTemplates() {
                     {/* Validation indicator */}
                     <div className="absolute top-2 right-2">
                       {validation.isValid ? (
-                        <div className="w-3 h-3 bg-green-500 rounded-full" title="Template is valid" />
+                        <div className="w-3 h-3 bg-green-500 rounded-full\" title="Template is valid" />
                       ) : (
-                        <div className="w-3 h-3 bg-red-500 rounded-full" title={`Template has ${validation.errors.length} errors`} />
+                        <div className="w-3 h-3 bg-red-500 rounded-full\" title={`Template has ${validation.errors.length} errors`} />
                       )}
                     </div>
                   </div>
