@@ -57,7 +57,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
         className
       )}
     >
-      {status.replace('_', ' ')}
+      {(status || '').replace('_', ' ')}
     </span>
   );
 }
