@@ -8,6 +8,7 @@ import { OperationsManagerDashboard } from './pages/OperationsManagerDashboard';
 import { OperatorDashboard } from './pages/OperatorDashboard';
 import { LeadManagement } from './pages/LeadManagement';
 import { QuotationManagement } from './pages/QuotationManagement';
+import { QuotationCreation } from './pages/QuotationCreation';
 import { JobScheduling } from './pages/JobScheduling';
 import { SiteAssessment } from './pages/SiteAssessment';
 import { JobSummaryFeedback } from './pages/JobSummaryFeedback';
@@ -37,7 +38,7 @@ function DashboardRouter() {
     case 'operator':
       return <OperatorDashboard />;
     default:
-      return <Navigate to="/login\" replace />;
+      return <Navigate to="/login" replace />;
   }
 }
 
@@ -48,12 +49,13 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         
         <Route path="/" element={<AppShell />}>
-          <Route index element={<Navigate to="/dashboard\" replace />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardRouter />} />
           
           <Route path="leads" element={<LeadManagement />} />
           <Route path="deals" element={<Deals />} />
           <Route path="quotations" element={<QuotationManagement />} />
+          <Route path="quotations/create" element={<QuotationCreation />} />
           <Route path="customers" element={<Customers />} />
           
           <Route path="jobs" element={<JobScheduling />} />
@@ -69,7 +71,7 @@ function App() {
           <Route path="templates" element={<QuotationTemplates />} />
         </Route>
         
-        <Route path="*" element={<Navigate to="/dashboard\" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );
