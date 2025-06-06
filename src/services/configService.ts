@@ -237,4 +237,46 @@ export const updateAdditionalParamsConfig = async (updates: Partial<AdditionalPa
     console.error('Error updating additional params config:', error);
     throw error;
   }
-}; 
+};
+
+// Default Template Configuration
+interface DefaultTemplateConfig {
+  defaultTemplateId: string;
+  updatedAt?: string;
+}
+
+export const getDefaultTemplateConfig = async (): Promise<DefaultTemplateConfig> => {
+  try {
+    // For now, use localStorage since templates are stored there
+    const savedConfig = localStorage.getItem('default-template-config');
+    if (savedConfig) {
+      return JSON.parse(savedConfig);
+    }
+    
+    return {
+      defaultTemplateId: '',
+      updatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error fetching default template config:', error);
+    return {
+      defaultTemplateId: '',
+      updatedAt: new Date().toISOString()
+    };
+  }
+};
+
+export const updateDefaultTemplateConfig = async (templateId: string): Promise<DefaultTemplateConfig> => {
+  try {
+    const config = {
+      defaultTemplateId: templateId,
+      updatedAt: new Date().toISOString()
+    };
+    
+    localStorage.setItem('default-template-config', JSON.stringify(config));
+    return config;
+  } catch (error) {
+    console.error('Error updating default template config:', error);
+    throw error;
+  }
+};

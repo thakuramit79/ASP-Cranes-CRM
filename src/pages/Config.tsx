@@ -4,8 +4,8 @@ import { CollapsibleCard } from '../components/common/CollapsibleCard';
 import { QuotationConfig } from '../components/config/QuotationConfig';
 import { ResourceRatesConfig } from '../components/config/ResourceRatesConfig';
 import { AdditionalParamsConfig } from '../components/config/AdditionalParamsConfig';
+import { DefaultTemplateConfig } from '../components/config/DefaultTemplateConfig';
 import { useAuthStore } from '../store/authStore';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
 
 export function Config() {
   const { user } = useAuthStore();
@@ -27,9 +27,17 @@ export function Config() {
 
       <div className="space-y-6">
         <CollapsibleCard 
+          icon={<FileText className="h-5 w-5" />}
+          title="Default Quotation Template"
+          defaultExpanded={true}
+        >
+          <DefaultTemplateConfig />
+        </CollapsibleCard>
+
+        <CollapsibleCard 
           icon={<Calendar className="h-5 w-5" />}
           title="Quotation Order Type Settings"
-          defaultExpanded={true}
+          defaultExpanded={false}
         >
           <QuotationConfig />
         </CollapsibleCard>
@@ -37,7 +45,7 @@ export function Config() {
         <CollapsibleCard 
           icon={<FileText className="h-5 w-5" />}
           title="Quotation Form"
-          defaultExpanded={true}
+          defaultExpanded={false}
         >
           <div className="text-sm text-gray-500 p-4">
             Configure quotation form settings and defaults here.
@@ -47,7 +55,7 @@ export function Config() {
         <CollapsibleCard
           icon={<Users className="h-5 w-5" />}
           title="Resource Rates"
-          defaultExpanded={true}
+          defaultExpanded={false}
         >
           <ResourceRatesConfig />
         </CollapsibleCard>
@@ -55,11 +63,11 @@ export function Config() {
         <CollapsibleCard
           icon={<Wrench className="h-5 w-5" />}
           title="Additional Parameters"
-          defaultExpanded={true}
+          defaultExpanded={false}
         >
           <AdditionalParamsConfig />
         </CollapsibleCard>
       </div>
     </div>
   );
-} 
+}
