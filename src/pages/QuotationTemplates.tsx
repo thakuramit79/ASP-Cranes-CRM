@@ -3,15 +3,17 @@ import { Button } from '../components/common/Button';
 import { Card, CardContent } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
 import { Template } from '../types/template';
-import { Plus, FileText, Edit2, Trash2, Copy, Eye } from 'lucide-react';
-import { TemplateEditor } from '../components/quotations/TemplateEditor';
+import { Plus, FileText, Edit2, Trash2, Copy, Eye, Code, Type } from 'lucide-react';
+import { RichTextTemplateEditor } from '../components/quotations/RichTextTemplateEditor';
+import { TemplatePreview } from '../components/quotations/TemplatePreview';
 import { Toast } from '../components/common/Toast';
+import { validateTemplate } from '../utils/templateMerger';
 
 const defaultTemplate: Template = {
   id: 'default',
   name: 'Default Quotation Template',
   description: 'Standard quotation template with company branding and placeholders',
-  content: '', // Will be set by TemplateEditor's default
+  content: '', // Will be set by RichTextTemplateEditor's default
   isDefault: true,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -22,6 +24,7 @@ export default function QuotationTemplates() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [editMode, setEditMode] = useState<'rich' | 'html'>('rich');
   const [toast, setToast] = useState<{
     show: boolean;
     title: string;
@@ -67,11 +70,13 @@ export default function QuotationTemplates() {
       updatedAt: new Date()
     };
     setSelectedTemplate(newTemplate);
+    setEditMode('rich');
     setIsEditOpen(true);
   };
 
-  const handleEditTemplate = (template: Template) => {
+  const handleEditTemplate = (template: Template, mode: 'rich' | 'html' = 'rich') => {
     setSelectedTemplate(template);
+    setEditMode(mode);
     setIsEditOpen(true);
   };
 
@@ -104,6 +109,13 @@ export default function QuotationTemplates() {
   };
 
   const handleSaveTemplate = (updatedTemplate: Template) => {
+    // Validate template before saving
+    const validation = validateTemplate(updatedTemplate.content);
+    if (!validation.isValid) {
+      showToast('Template contains errors. Please fix them before saving.', 'error');
+      return;
+    }
+
     const existingIndex = templates.findIndex(t => t.id === updatedTemplate.id);
     if (existingIndex >= 0) {
       const newTemplates = [...templates];
@@ -116,38 +128,12 @@ export default function QuotationTemplates() {
     showToast('Template saved successfully');
   };
 
-  // Mock data for preview
-  const mockData = {
-    customer_name: 'John Doe',
-    customer_email: 'john.doe@abcconstruction.com',
-    customer_phone: '+91 98765 43210',
-    customer_company: 'ABC Construction Ltd.',
-    customer_address: '456 Building Site, Construction Zone, Mumbai 400001',
-    customer_designation: 'Project Manager',
-    quotation_id: 'QT-2024-001',
-    quotation_date: new Date().toLocaleDateString('en-IN'),
-    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN'),
-    equipment_name: 'Hydraulic Crane XL2000',
-    equipment_capacity: '50 tons',
-    project_duration: '30 days',
-    working_hours: '8 hours/day',
-    total_amount: '₹1,50,000',
-    base_rate: '₹2,500/hour',
-    site_location: 'Mumbai Construction Site',
-    company_name: 'ASP Cranes',
-    company_address: '123 Industrial Area, Mumbai, Maharashtra 400001',
-    company_phone: '+91 22 1234 5678',
-    company_email: 'info@aspcranes.com',
-    company_gst: '27AABCS1429B1ZB'
-  };
-
-  const replaceTemplatePlaceholders = (content: string): string => {
-    let result = content;
-    Object.entries(mockData).forEach(([key, value]) => {
-      const placeholder = `{{${key}}}`;
-      result = result.replaceAll(placeholder, value);
-    });
-    return result;
+  const getTemplatePreview = (content: string) => {
+    // Strip HTML tags for preview
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    const textContent = tempDiv.textContent || tempDiv.innerText || '';
+    return textContent.substring(0, 200) + (textContent.length > 200 ? '...' : '');
   };
 
   return (
@@ -155,7 +141,7 @@ export default function QuotationTemplates() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">Quotation Templates</h1>
-          <p className="text-gray-500 mt-1">Manage and customize your quotation templates with dynamic placeholders</p>
+          <p className="text-gray-500 mt-1">Create and manage quotation templates with rich text editing and dynamic placeholders</p>
         </div>
         <Button 
           onClick={handleCreateTemplate}
@@ -167,86 +153,174 @@ export default function QuotationTemplates() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {templates.map(template => (
-          <Card key={template.id} className="h-full">
-            <CardContent className="p-6 h-full flex flex-col">
-              <div className="flex-1">
-                <div className="aspect-[3/4] bg-gray-50 rounded-lg mb-4 p-4 flex items-start justify-start overflow-hidden">
-                  <div className="w-full h-full">
-                    <pre className="text-[8px] leading-[10px] text-gray-600 whitespace-pre-wrap overflow-hidden">
-                      {template.content ? template.content.substring(0, 500) + (template.content.length > 500 ? '...' : '') : 'Empty template'}
-                    </pre>
+        {templates.map(template => {
+          const validation = validateTemplate(template.content);
+          
+          return (
+            <Card key={template.id} className="h-full">
+              <CardContent className="p-6 h-full flex flex-col">
+                <div className="flex-1">
+                  <div className="aspect-[3/4] bg-gray-50 rounded-lg mb-4 p-4 flex items-start justify-start overflow-hidden relative">
+                    {template.content ? (
+                      <div className="w-full h-full">
+                        <div 
+                          className="text-[8px] leading-[10px] text-gray-600 overflow-hidden"
+                          dangerouslySetInnerHTML={{ 
+                            __html: template.content.substring(0, 500) + (template.content.length > 500 ? '...' : '') 
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-[8px] leading-[10px] text-gray-400">Empty template</div>
+                    )}
+                    
+                    {/* Validation indicator */}
+                    <div className="absolute top-2 right-2">
+                      {validation.isValid ? (
+                        <div className="w-3 h-3 bg-green-500 rounded-full" title="Template is valid" />
+                      ) : (
+                        <div className="w-3 h-3 bg-red-500 rounded-full" title={`Template has ${validation.errors.length} errors`} />
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      {template.name}
+                    </h3>
+                    <p className="text-sm text-gray-600">{template.description}</p>
+                    
+                    <div className="flex items-center gap-2">
+                      {template.isDefault && (
+                        <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                          Default Template
+                        </span>
+                      )}
+                      
+                      {!validation.isValid && (
+                        <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                          {validation.errors.length} Error{validation.errors.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      
+                      {validation.warnings.length > 0 && (
+                        <span className="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                          {validation.warnings.length} Warning{validation.warnings.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    {template.name}
-                  </h3>
-                  <p className="text-sm text-gray-600">{template.description}</p>
-                  {template.isDefault && (
-                    <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                      Default Template
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handlePreviewTemplate(template)}
-                  leftIcon={<Eye className="w-3 h-3" />}
-                >
-                  Preview
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleEditTemplate(template)}
-                  leftIcon={<Edit2 className="w-3 h-3" />}
-                >
-                  Edit
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleDuplicateTemplate(template)}
-                  leftIcon={<Copy className="w-3 h-3" />}
-                >
-                  Copy
-                </Button>
-                {!template.isDefault && (
+                
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => handleDeleteTemplate(template.id)}
-                    leftIcon={<Trash2 className="w-3 h-3" />}
+                    onClick={() => handlePreviewTemplate(template)}
+                    leftIcon={<Eye className="w-3 h-3" />}
                   >
-                    Delete
+                    Preview
                   </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleEditTemplate(template, 'rich')}
+                    leftIcon={<Type className="w-3 h-3" />}
+                  >
+                    Edit
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleEditTemplate(template, 'html')}
+                    leftIcon={<Code className="w-3 h-3" />}
+                    title="Edit HTML Source"
+                  >
+                    HTML
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleDuplicateTemplate(template)}
+                    leftIcon={<Copy className="w-3 h-3" />}
+                  >
+                    Copy
+                  </Button>
+                  
+                  {!template.isDefault && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => handleDeleteTemplate(template.id)}
+                      leftIcon={<Trash2 className="w-3 h-3" />}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Edit Modal */}
+      {/* Rich Text Editor Modal */}
       <Modal
-        isOpen={isEditOpen}
+        isOpen={isEditOpen && editMode === 'rich'}
         onClose={() => setIsEditOpen(false)}
         title={selectedTemplate?.isDefault ? 'View Template' : 'Edit Template'}
         size="full"
       >
         {selectedTemplate && (
-          <TemplateEditor
+          <RichTextTemplateEditor
             template={selectedTemplate}
             onSave={handleSaveTemplate}
             onCancel={() => setIsEditOpen(false)}
           />
+        )}
+      </Modal>
+
+      {/* HTML Source Editor Modal */}
+      <Modal
+        isOpen={isEditOpen && editMode === 'html'}
+        onClose={() => setIsEditOpen(false)}
+        title="Edit HTML Source"
+        size="xl"
+      >
+        {selectedTemplate && (
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                <strong>HTML Mode:</strong> You're editing the raw HTML source. Be careful with syntax and ensure all tags are properly closed.
+              </p>
+            </div>
+            
+            <textarea
+              className="w-full h-96 font-mono text-sm border border-gray-300 rounded-lg p-4"
+              value={selectedTemplate.content}
+              onChange={(e) => setSelectedTemplate(prev => prev ? { ...prev, content: e.target.value } : null)}
+              placeholder="Enter HTML content with {{placeholders}}"
+            />
+            
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => selectedTemplate && handleSaveTemplate(selectedTemplate)}
+              >
+                Save Template
+              </Button>
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -255,22 +329,24 @@ export default function QuotationTemplates() {
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
         title={`Preview: ${selectedTemplate?.name}`}
-        size="lg"
+        size="xl"
       >
         {selectedTemplate && (
           <div className="space-y-4">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                <strong>Preview Mode:</strong> Placeholders have been replaced with sample data for demonstration.
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Preview Mode:</strong> This shows how the template will look with sample data. Placeholders are highlighted for reference.
               </p>
             </div>
+            
             <div className="bg-white border rounded-lg p-6 shadow-sm max-h-96 overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
-                {selectedTemplate.content 
-                  ? replaceTemplatePlaceholders(selectedTemplate.content)
-                  : 'No content available'
-                }
-              </pre>
+              <div 
+                dangerouslySetInnerHTML={{ __html: selectedTemplate.content }}
+                style={{ 
+                  fontFamily: 'Arial, sans-serif',
+                  lineHeight: '1.6'
+                }}
+              />
             </div>
           </div>
         )}
