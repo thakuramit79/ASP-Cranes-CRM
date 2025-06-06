@@ -12,7 +12,12 @@ import {
   IndianRupee,
   Calendar,
   User,
-  Building2
+  Building2,
+  X,
+  Clock,
+  MapPin,
+  Truck,
+  Settings
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
@@ -26,7 +31,9 @@ import { QuotationTemplate } from '../components/quotations/QuotationTemplate';
 import { useAuthStore } from '../store/authStore';
 import { Quotation } from '../types/quotation';
 import { Template } from '../types/template';
+import { Deal } from '../types/deal';
 import { getQuotations } from '../services/quotationService';
+import { getDeals } from '../services/dealService';
 import { getDefaultTemplateConfig } from '../services/configService';
 import { formatCurrency } from '../utils/formatters';
 
@@ -42,12 +49,16 @@ export function QuotationManagement() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedDealId, setSelectedDealId] = useState<string>('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [toast, setToast] = useState<{
@@ -58,20 +69,30 @@ export function QuotationManagement() {
   }>({ show: false, title: '' });
 
   useEffect(() => {
-    fetchQuotations();
+    fetchData();
   }, []);
 
   useEffect(() => {
     filterQuotations();
   }, [quotations, searchTerm, statusFilter]);
 
-  const fetchQuotations = async () => {
+  const fetchData = async () => {
     try {
-      const data = await getQuotations();
-      setQuotations(data);
+      const [quotationsData, dealsData] = await Promise.all([
+        getQuotations(),
+        getDeals()
+      ]);
+      
+      setQuotations(quotationsData);
+      
+      // Filter deals to only show qualified ones
+      const qualifiedDeals = dealsData.filter(deal => 
+        deal.stage === 'qualification' || deal.stage === 'proposal'
+      );
+      setDeals(qualifiedDeals);
     } catch (error) {
-      console.error('Error fetching quotations:', error);
-      showToast('Error fetching quotations', 'error');
+      console.error('Error fetching data:', error);
+      showToast('Error fetching data', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -104,8 +125,23 @@ export function QuotationManagement() {
   };
 
   const handleCreateQuotation = () => {
-    // Navigate to deals page where quotations can be created
-    navigate('/deals');
+    if (deals.length === 0) {
+      showToast('No qualified deals available', 'warning', 'Create and qualify deals first to generate quotations.');
+      return;
+    }
+    setIsCreateModalOpen(true);
+  };
+
+  const handleProceedWithDeal = () => {
+    if (!selectedDealId) {
+      showToast('Please select a deal', 'warning');
+      return;
+    }
+
+    // Navigate to quotation creation with the selected deal
+    navigate(`/quotations/create?dealId=${selectedDealId}`);
+    setIsCreateModalOpen(false);
+    setSelectedDealId('');
   };
 
   const getDefaultTemplate = async (): Promise<Template | null> => {
@@ -302,6 +338,14 @@ export function QuotationManagement() {
     }
   };
 
+  const dealOptions = [
+    { value: '', label: 'Select a qualified deal...' },
+    ...deals.map(deal => ({
+      value: deal.id,
+      label: `${deal.customer.name} - ${deal.title} (${formatCurrency(deal.value)})`
+    }))
+  ];
+
   if (!user || (user.role !== 'sales_agent' && user.role !== 'admin')) {
     return (
       <div className="p-4 text-center text-gray-500">
@@ -423,6 +467,18 @@ export function QuotationManagement() {
                             size="sm"
                             onClick={() => {
                               setSelectedQuotation(quotation);
+                              setIsDetailsOpen(true);
+                            }}
+                            title="View Details"
+                          >
+                            <FileText size={16} />
+                          </Button>
+                          
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedQuotation(quotation);
                               setIsPreviewOpen(true);
                             }}
                             title="Preview"
@@ -459,6 +515,256 @@ export function QuotationManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Quotation Modal - Deal Selection */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setSelectedDealId('');
+        }}
+        title="Create New Quotation"
+        size="lg"
+      >
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Select a Qualified Deal
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Choose from qualified deals to create a quotation. Only deals in qualification or proposal stage are shown.
+            </p>
+            
+            <Select
+              options={dealOptions}
+              value={selectedDealId}
+              onChange={setSelectedDealId}
+              className="w-full"
+              label="Available Deals"
+            />
+            
+            {selectedDealId && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                {(() => {
+                  const selectedDeal = deals.find(d => d.id === selectedDealId);
+                  if (!selectedDeal) return null;
+                  
+                  return (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-blue-900">Selected Deal Details</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-blue-700 font-medium">Customer:</span>
+                          <p className="text-blue-800">{selectedDeal.customer.name}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Company:</span>
+                          <p className="text-blue-800">{selectedDeal.customer.company}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Value:</span>
+                          <p className="text-blue-800">{formatCurrency(selectedDeal.value)}</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Stage:</span>
+                          <p className="text-blue-800 capitalize">{selectedDeal.stage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateModalOpen(false);
+                setSelectedDealId('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleProceedWithDeal}
+              disabled={!selectedDealId}
+            >
+              Create Quotation
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Quotation Details Modal */}
+      <Modal
+        isOpen={isDetailsOpen}
+        onClose={() => {
+          setIsDetailsOpen(false);
+          setSelectedQuotation(null);
+        }}
+        title="Quotation Details"
+        size="xl"
+      >
+        {selectedQuotation && (
+          <div className="space-y-6">
+            {/* Customer Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Customer Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Name</label>
+                    <p className="text-gray-900">{selectedQuotation.customerContact?.name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Company</label>
+                    <p className="text-gray-900">{selectedQuotation.customerContact?.company || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Email</label>
+                    <p className="text-gray-900">{selectedQuotation.customerContact?.email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Phone</label>
+                    <p className="text-gray-900">{selectedQuotation.customerContact?.phone || 'N/A'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-sm font-medium text-gray-500">Address</label>
+                    <p className="text-gray-900">{selectedQuotation.customerContact?.address || 'N/A'}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Equipment & Project Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="h-5 w-5" />
+                  Equipment & Project Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Equipment</label>
+                    <p className="text-gray-900">{selectedQuotation.selectedEquipment?.name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Order Type</label>
+                    <p className="text-gray-900 capitalize">{selectedQuotation.orderType}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Duration</label>
+                    <p className="text-gray-900">{selectedQuotation.numberOfDays} days</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Working Hours</label>
+                    <p className="text-gray-900">{selectedQuotation.workingHours} hours/day</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Shift</label>
+                    <p className="text-gray-900">{selectedQuotation.shift === 'double' ? 'Double Shift' : 'Single Shift'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Time</label>
+                    <p className="text-gray-900">{selectedQuotation.dayNight === 'day' ? 'Day Shift' : 'Night Shift'}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pricing Details */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <IndianRupee className="h-5 w-5" />
+                  Pricing Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Base Rate</label>
+                    <p className="text-gray-900">{formatCurrency(selectedQuotation.baseRate)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Usage Type</label>
+                    <p className="text-gray-900 capitalize">{selectedQuotation.usage}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Risk Factor</label>
+                    <p className="text-gray-900 capitalize">{selectedQuotation.riskFactor}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Site Distance</label>
+                    <p className="text-gray-900">{selectedQuotation.siteDistance} km</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Mob/Demob Cost</label>
+                    <p className="text-gray-900">{formatCurrency(selectedQuotation.mobDemob)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Extra Charges</label>
+                    <p className="text-gray-900">{formatCurrency(selectedQuotation.extraCharge)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Food Resources</label>
+                    <p className="text-gray-900">{selectedQuotation.foodResources} person(s)</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Accommodation</label>
+                    <p className="text-gray-900">{selectedQuotation.accomResources} person(s)</p>
+                  </div>
+                  <div className="col-span-2 pt-4 border-t">
+                    <label className="text-sm font-medium text-gray-500">Total Amount</label>
+                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(selectedQuotation.totalRent)}</p>
+                    <p className="text-sm text-gray-500">
+                      {selectedQuotation.includeGst ? 'Including GST (18%)' : 'Excluding GST'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDetailsOpen(false);
+                  setSelectedQuotation(null);
+                  setIsPreviewOpen(true);
+                }}
+                leftIcon={<Eye size={16} />}
+              >
+                Preview Template
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleDownloadPDF(selectedQuotation)}
+                disabled={isGeneratingPDF}
+                leftIcon={<Download size={16} />}
+              >
+                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
+              </Button>
+              <Button
+                onClick={() => handleSendToCustomer(selectedQuotation)}
+                disabled={isSendingEmail}
+                leftIcon={<Send size={16} />}
+              >
+                {isSendingEmail ? 'Sending...' : 'Send to Customer'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Preview Modal */}
       <Modal
