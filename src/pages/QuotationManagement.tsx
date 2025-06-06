@@ -80,8 +80,8 @@ export function QuotationManagement() {
 
     if (searchTerm) {
       filtered = filtered.filter(quotation =>
-        quotation.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quotation.customerContact.company.toLowerCase().includes(searchTerm.toLowerCase())
+        quotation.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        quotation.customerContact?.company?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -140,12 +140,12 @@ export function QuotationManagement() {
     // Define the data mapping for template placeholders
     const templateData = {
       // Customer information
-      customer_name: quotation.customerContact.name,
-      customer_email: quotation.customerContact.email,
-      customer_phone: quotation.customerContact.phone,
-      customer_company: quotation.customerContact.company,
-      customer_address: quotation.customerContact.address,
-      customer_designation: quotation.customerContact.designation || 'N/A',
+      customer_name: quotation.customerContact?.name || 'N/A',
+      customer_email: quotation.customerContact?.email || 'N/A',
+      customer_phone: quotation.customerContact?.phone || 'N/A',
+      customer_company: quotation.customerContact?.company || 'N/A',
+      customer_address: quotation.customerContact?.address || 'N/A',
+      customer_designation: quotation.customerContact?.designation || 'N/A',
 
       // Quotation information
       quotation_id: quotation.id.slice(0, 8).toUpperCase(),
@@ -153,8 +153,8 @@ export function QuotationManagement() {
       valid_until: new Date(new Date(quotation.createdAt).setDate(new Date(quotation.createdAt).getDate() + 30)).toLocaleDateString('en-IN'),
 
       // Equipment information
-      equipment_name: quotation.selectedEquipment.name,
-      equipment_capacity: `${quotation.selectedEquipment.name}`,
+      equipment_name: quotation.selectedEquipment?.name || 'N/A',
+      equipment_capacity: `${quotation.selectedEquipment?.name || 'N/A'}`,
       project_duration: `${quotation.numberOfDays} days`,
       working_hours: `${quotation.workingHours} hours/day`,
       shift_type: quotation.shift === 'double' ? 'Double Shift' : 'Single Shift',
@@ -163,7 +163,7 @@ export function QuotationManagement() {
       // Pricing information
       total_amount: formatCurrency(quotation.totalRent),
       base_rate: formatCurrency(quotation.baseRate),
-      site_location: quotation.customerContact.address,
+      site_location: quotation.customerContact?.address || 'N/A',
 
       // Company information
       company_name: 'ASP Cranes',
@@ -215,7 +215,7 @@ export function QuotationManagement() {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Quotation - ${quotation.customerContact.name}</title>
+          <title>Quotation - ${quotation.customerContact?.name || 'Customer'}</title>
           <style>
             body {
               font-family: Arial, sans-serif;
@@ -281,9 +281,9 @@ export function QuotationManagement() {
       
       // Create mailto link with the quotation content
       const subject = `Quotation from ASP Cranes - ${quotation.id.slice(0, 8).toUpperCase()}`;
-      const body = `Dear ${quotation.customerContact.name},\n\nPlease find your quotation details below:\n\n${content}\n\nBest regards,\nASP Cranes Team`;
+      const body = `Dear ${quotation.customerContact?.name || 'Customer'},\n\nPlease find your quotation details below:\n\n${content}\n\nBest regards,\nASP Cranes Team`;
       
-      const mailtoLink = `mailto:${quotation.customerContact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const mailtoLink = `mailto:${quotation.customerContact?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(mailtoLink);
       
       showToast('Email prepared successfully', 'success', 'Your email client should open with the quotation details.');
@@ -352,9 +352,9 @@ export function QuotationManagement() {
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {quotation.customerContact.name}
+                          {quotation.customerContact?.name || 'Unknown Customer'}
                         </h3>
-                        <p className="text-sm text-gray-500">{quotation.customerContact.company}</p>
+                        <p className="text-sm text-gray-500">{quotation.customerContact?.company || 'No Company'}</p>
                       </div>
                       <StatusBadge status={quotation.status} />
                     </div>
@@ -362,7 +362,7 @@ export function QuotationManagement() {
                     <div className="space-y-3">
                       <div className="flex items-center text-gray-600">
                         <FileText className="w-4 h-4 mr-2" />
-                        <span className="text-sm">{quotation.selectedEquipment.name}</span>
+                        <span className="text-sm">{quotation.selectedEquipment?.name || 'No Equipment'}</span>
                       </div>
                       
                       <div className="flex items-center text-gray-600">
