@@ -14,6 +14,7 @@ import {
   User,
   Building2
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -39,6 +40,7 @@ const STATUS_OPTIONS = [
 
 export function QuotationManagement() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,6 +101,11 @@ export function QuotationManagement() {
   ) => {
     setToast({ show: true, title, variant, description });
     setTimeout(() => setToast({ show: false, title: '' }), 3000);
+  };
+
+  const handleCreateQuotation = () => {
+    // Navigate to deals page where quotations can be created
+    navigate('/deals');
   };
 
   const getDefaultTemplate = async (): Promise<Template | null> => {
@@ -326,7 +333,7 @@ export function QuotationManagement() {
         </div>
         
         <Button
-          onClick={() => {/* Navigate to create quotation */}}
+          onClick={handleCreateQuotation}
           leftIcon={<Plus size={16} />}
         >
           New Quotation
@@ -335,7 +342,7 @@ export function QuotationManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Quotations</CardTitle>
+          <CardTitle>Quotation History</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -345,73 +352,109 @@ export function QuotationManagement() {
               No quotations found. Create a new quotation to get started.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredQuotations.map((quotation) => (
-                <Card key={quotation.id} variant="bordered" className="h-full">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {quotation.customerContact?.name || 'Unknown Customer'}
-                        </h3>
-                        <p className="text-sm text-gray-500">{quotation.customerContact?.company || 'No Company'}</p>
-                      </div>
-                      <StatusBadge status={quotation.status} />
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center text-gray-600">
-                        <FileText className="w-4 h-4 mr-2" />
-                        <span className="text-sm">{quotation.selectedEquipment?.name || 'No Equipment'}</span>
-                      </div>
-                      
-                      <div className="flex items-center text-gray-600">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        <span className="text-sm">{quotation.numberOfDays} days</span>
-                      </div>
-                      
-                      <div className="flex items-center text-gray-600">
-                        <IndianRupee className="w-4 h-4 mr-2" />
-                        <span className="text-sm font-medium">{formatCurrency(quotation.totalRent)}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedQuotation(quotation);
-                          setIsPreviewOpen(true);
-                        }}
-                        leftIcon={<Eye size={14} />}
-                      >
-                        Preview
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadPDF(quotation)}
-                        disabled={isGeneratingPDF}
-                        leftIcon={<Download size={14} />}
-                      >
-                        {isGeneratingPDF ? 'Generating...' : 'PDF'}
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSendToCustomer(quotation)}
-                        disabled={isSendingEmail}
-                        leftIcon={<Send size={14} />}
-                      >
-                        {isSendingEmail ? 'Sending...' : 'Send'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Equipment
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Duration
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredQuotations.map((quotation) => (
+                    <tr key={quotation.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {quotation.customerContact?.name || quotation.customerName || 'Unknown Customer'}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {quotation.customerContact?.company || 'No Company'}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {quotation.selectedEquipment?.name || 'No Equipment'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {quotation.numberOfDays} days
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {quotation.workingHours}h/day
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatCurrency(quotation.totalRent)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <StatusBadge status={quotation.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(quotation.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedQuotation(quotation);
+                              setIsPreviewOpen(true);
+                            }}
+                            title="Preview"
+                          >
+                            <Eye size={16} />
+                          </Button>
+                          
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownloadPDF(quotation)}
+                            disabled={isGeneratingPDF}
+                            title="Download PDF"
+                          >
+                            <Download size={16} />
+                          </Button>
+                          
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSendToCustomer(quotation)}
+                            disabled={isSendingEmail}
+                            title="Send to Customer"
+                          >
+                            <Send size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
